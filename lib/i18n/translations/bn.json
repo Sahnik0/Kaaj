@@ -1,0 +1,72 @@
+{
+  "app.name": "কাজ",
+  "app.tagline": "স্থানীয় চাকরি এবং সেবা খুঁজুন",
+  "app.description": "টেইলরিং, শিক্ষাদান, পরিষ্কার এবং আরও অনেক কিছুর জন্য স্থানীয় নিয়োগকর্তা এবং প্রার্থীদের সাথে সংযোগ করুন।",
+
+  "nav.home": "হোম",
+  "nav.about": "আমাদের সম্পর্কে",
+  "nav.howItWorks": "কিভাবে কাজ করে",
+  "nav.categories": "বিভাগসমূহ",
+  "nav.dashboard": "ড্যাশবোর্ড",
+  "nav.signIn": "সাইন ইন",
+  "nav.signUp": "সাইন আপ",
+
+  "dashboard.title": "ড্যাশবোর্ড",
+  "dashboard.welcome": "আবারও স্বাগতম",
+  "dashboard.overview": "এখানে আপনার কার্যকলাপের একটি সংক্ষিপ্ত বিবরণ রয়েছে।",
+
+  "footer.rights": "সর্বস্বত্ব সংরক্ষিত।",
+  "footer.quickLinks": "দ্রুত লিঙ্ক",
+  "footer.forRecruiters": "নিয়োগকর্তাদের জন্য",
+  "footer.forCandidates": "প্রার্থীদের জন্য",
+  "footer.contactUs": "যোগাযোগ করুন",
+  "footer.termsOfService": "সেবার শর্তাবলী",
+  "footer.privacyPolicy": "গোপনীয়তা নীতি",
+
+  "auth.signIn": "সাইন ইন",
+  "auth.signUp": "সাইন আপ",
+  "auth.email": "ইমেইল",
+  "auth.password": "পাসওয়ার্ড",
+  "auth.forgotPassword": "পাসওয়ার্ড ভুলে গেছেন?",
+  "auth.createAccount": "একটি অ্যাকাউন্ট তৈরি করুন",
+  "auth.alreadyHaveAccount": "ইতিমধ্যে একটি অ্যাকাউন্ট আছে?",
+  "auth.fullName": "পুরো নাম",
+  "auth.confirmPassword": "পাসওয়ার্ড নিশ্চিত করুন",
+
+  "onboarding.chooseRole": "আপনার ভূমিকা বেছে নিন",
+  "onboarding.roleDescription": "কাজ কিভাবে ব্যবহার করতে চান তা নির্বাচন করুন। আপনি হয় একজন নিয়োগকর্তা বা একজন প্রার্থী হতে পারেন।",
+  "onboarding.recruiter": "নিয়োগকর্তা",
+  "onboarding.candidate": "প্রার্থী",
+  "onboarding.recruiterDesc": "চাকরি পোস্ট করুন এবং প্রার্থী নিয়োগ করুন",
+  "onboarding.candidateDesc": "চাকরি খুঁজুন এবং আবেদন করুন",
+
+  "jobs.postJob": "চাকরি পোস্ট করুন",
+  "jobs.findJobs": "চাকরি খুঁজুন",
+  "jobs.myJobs": "আমার চাকরি",
+  "jobs.applications": "আবেদন",
+  "jobs.jobDetails": "চাকরির বিবরণ",
+
+  "messages.title": "বার্তা",
+  "messages.noMessages": "এখনও কোন বার্তা নেই",
+  "messages.startConversation": "কথোপকথন শুরু করুন",
+  "messages.typeMessage": "একটি বার্তা টাইপ করুন...",
+
+  "notifications.title": "বিজ্ঞপ্তি",
+  "notifications.noNotifications": "এখনও কোন বিজ্ঞপ্তি নেই",
+  "notifications.markAllAsRead": "সবগুলো পঠিত হিসেবে চিহ্নিত করুন",
+
+  "learning.title": "শিক্ষা পথ",
+  "learning.description": "আপনার দক্ষতা বিকাশ এবং কর্মজীবন উন্নত করার জন্য সংস্থান অন্বেষণ করুন।",
+  "learning.addResource": "সংস্থান যোগ করুন",
+
+  "ratings.title": "রেটিং এবং পর্যালোচনা",
+  "ratings.yourRating": "আপনার রেটিং",
+  "ratings.noRatings": "এখনও কোন রেটিং নেই",
+
+  "reports.title": "একটি সমস্যা রিপোর্ট করুন",
+  "reports.description": "আপনি যে কোনও সমস্যার সম্মুখীন হন তা আমাদের জানান।",
+
+  "language.english": "English",
+  "language.bengali": "বাংলা",
+  "language.hindi": "हिन्दी"
+}

@@ -1,0 +1,72 @@
+{
+  "app.name": "Kaaj",
+  "app.tagline": "Find Local Jobs and Services",
+  "app.description": "Connect with local recruiters and candidates for jobs in tailoring, teaching, cleaning, and more.",
+
+  "nav.home": "Home",
+  "nav.about": "About",
+  "nav.howItWorks": "How It Works",
+  "nav.categories": "Categories",
+  "nav.dashboard": "Dashboard",
+  "nav.signIn": "Sign In",
+  "nav.signUp": "Sign Up",
+
+  "dashboard.title": "Dashboard",
+  "dashboard.welcome": "Welcome back",
+  "dashboard.overview": "Here's an overview of your activity.",
+
+  "footer.rights": "All rights reserved.",
+  "footer.quickLinks": "Quick Links",
+  "footer.forRecruiters": "For Recruiters",
+  "footer.forCandidates": "For Candidates",
+  "footer.contactUs": "Contact Us",
+  "footer.termsOfService": "Terms of Service",
+  "footer.privacyPolicy": "Privacy Policy",
+
+  "auth.signIn": "Sign In",
+  "auth.signUp": "Sign Up",
+  "auth.email": "Email",
+  "auth.password": "Password",
+  "auth.forgotPassword": "Forgot password?",
+  "auth.createAccount": "Create an account",
+  "auth.alreadyHaveAccount": "Already have an account?",
+  "auth.fullName": "Full Name",
+  "auth.confirmPassword": "Confirm Password",
+
+  "onboarding.chooseRole": "Choose Your Role",
+  "onboarding.roleDescription": "Select how you want to use Kaaj. You can be either a recruiter or a candidate.",
+  "onboarding.recruiter": "Recruiter",
+  "onboarding.candidate": "Candidate",
+  "onboarding.recruiterDesc": "Post jobs and hire candidates",
+  "onboarding.candidateDesc": "Find jobs and apply to them",
+
+  "jobs.postJob": "Post a Job",
+  "jobs.findJobs": "Find Jobs",
+  "jobs.myJobs": "My Jobs",
+  "jobs.applications": "Applications",
+  "jobs.jobDetails": "Job Details",
+
+  "messages.title": "Messages",
+  "messages.noMessages": "No messages yet",
+  "messages.startConversation": "Start a conversation",
+  "messages.typeMessage": "Type a message...",
+
+  "notifications.title": "Notifications",
+  "notifications.noNotifications": "No notifications yet",
+  "notifications.markAllAsRead": "Mark all as read",
+
+  "learning.title": "Learning Path",
+  "learning.description": "Explore resources to develop your skills and advance your career.",
+  "learning.addResource": "Add Resource",
+
+  "ratings.title": "Ratings & Reviews",
+  "ratings.yourRating": "Your Rating",
+  "ratings.noRatings": "No ratings yet",
+
+  "reports.title": "Report an Issue",
+  "reports.description": "Let us know about any problems you encounter.",
+
+  "language.english": "English",
+  "language.bengali": "বাংলা",
+  "language.hindi": "हिन्दी"
+}

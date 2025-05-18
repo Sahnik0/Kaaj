@@ -1,0 +1,72 @@
+{
+  "app.name": "काज",
+  "app.tagline": "स्थानीय नौकरियां और सेवाएं खोजें",
+  "app.description": "टेलरिंग, शिक्षण, सफाई और अधिक के लिए स्थानीय रिक्रूटर्स और उम्मीदवारों से जुड़ें।",
+
+  "nav.home": "होम",
+  "nav.about": "हमारे बारे में",
+  "nav.howItWorks": "यह कैसे काम करता है",
+  "nav.categories": "श्रेणियाँ",
+  "nav.dashboard": "डैशबोर्ड",
+  "nav.signIn": "साइन इन",
+  "nav.signUp": "साइन अप",
+
+  "dashboard.title": "डैशबोर्ड",
+  "dashboard.welcome": "वापस स्वागत है",
+  "dashboard.overview": "यहां आपकी गतिविधि का एक अवलोकन है।",
+
+  "footer.rights": "सर्वाधिकार सुरक्षित।",
+  "footer.quickLinks": "त्वरित लिंक",
+  "footer.forRecruiters": "रिक्रूटर्स के लिए",
+  "footer.forCandidates": "उम्मीदवारों के लिए",
+  "footer.contactUs": "संपर्क करें",
+  "footer.termsOfService": "सेवा की शर्तें",
+  "footer.privacyPolicy": "गोपनीयता नीति",
+
+  "auth.signIn": "साइन इन",
+  "auth.signUp": "साइन अप",
+  "auth.email": "ईमेल",
+  "auth.password": "पासवर्ड",
+  "auth.forgotPassword": "पासवर्ड भूल गए?",
+  "auth.createAccount": "एक खाता बनाएं",
+  "auth.alreadyHaveAccount": "पहले से ही एक खाता है?",
+  "auth.fullName": "पूरा नाम",
+  "auth.confirmPassword": "पासवर्ड की पुष्टि करें",
+
+  "onboarding.chooseRole": "अपनी भूमिका चुनें",
+  "onboarding.roleDescription": "चुनें कि आप काज का उपयोग कैसे करना चाहते हैं। आप या तो एक रिक्रूटर या एक उम्मीदवार हो सकते हैं।",
+  "onboarding.recruiter": "रिक्रूटर",
+  "onboarding.candidate": "उम्मीदवार",
+  "onboarding.recruiterDesc": "नौकरियां पोस्ट करें और उम्मीदवारों को नियुक्त करें",
+  "onboarding.candidateDesc": "नौकरियां खोजें और आवेदन करें",
+
+  "jobs.postJob": "नौकरी पोस्ट करें",
+  "jobs.findJobs": "नौकरियां खोजें",
+  "jobs.myJobs": "मेरी नौकरियां",
+  "jobs.applications": "आवेदन",
+  "jobs.jobDetails": "नौकरी विवरण",
+
+  "messages.title": "संदेश",
+  "messages.noMessages": "अभी तक कोई संदेश नहीं",
+  "messages.startConversation": "बातचीत शुरू करें",
+  "messages.typeMessage": "एक संदेश टाइप करें...",
+
+  "notifications.title": "सूचनाएं",
+  "notifications.noNotifications": "अभी तक कोई सूचना नहीं",
+  "notifications.markAllAsRead": "सभी को पढ़ा हुआ मार्क करें",
+
+  "learning.title": "लर्निंग पाथ",
+  "learning.description": "अपने कौशल विकसित करने और अपने करियर को आगे बढ़ाने के लिए संसाधनों का अन्वेषण करें।",
+  "learning.addResource": "संसाधन जोड़ें",
+
+  "ratings.title": "रेटिंग और समीक्षाएं",
+  "ratings.yourRating": "आपकी रेटिंग",
+  "ratings.noRatings": "अभी तक कोई रेटिंग नहीं",
+
+  "reports.title": "समस्या की रिपोर्ट करें",
+  "reports.description": "आपको होने वाली किसी भी समस्या के बारे में हमें बताएं।",
+
+  "language.english": "English",
+  "language.bengali": "বাংলা",
+  "language.hindi": "हिन्दी"
+}

@@ -1,0 +1,37 @@
+import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
+import { FirebaseProvider } from "@/lib/firebase/firebase-provider"
+import { LanguageProvider } from "@/lib/i18n/language-context"
+import { Toaster } from "@/components/ui/toaster"
+import { ThemeProvider } from "@/components/theme-provider"
+
+const inter = Inter({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: "Kaaj - Hyperlocal Job Marketplace",
+  description: "Find local jobs and services in your area",
+    generator: 'v0.dev'
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider>
+          <LanguageProvider>
+            <FirebaseProvider>
+              {children}
+              <Toaster />
+            </FirebaseProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  )
+}
