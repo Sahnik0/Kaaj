@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { Briefcase, Calendar, CheckCircle, MessageSquare, Star, User, X } from "lucide-react"
 
 export default function JobApplications() {
@@ -24,7 +24,7 @@ export default function JobApplications() {
   const jobId = params.id
   const router = useRouter()
   const { getJob, getApplications, updateApplicationStatus, sendMessage, userRole } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
 
   const [job, setJob] = useState<any>(null)
   const [applications, setApplications] = useState<any[]>([])

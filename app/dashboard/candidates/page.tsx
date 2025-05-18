@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
 import { Briefcase, MapPin, MessageSquare, Search, Star, User } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 
 export default function Candidates() {
   const { userRole, getCandidates } = useFirebase()
@@ -18,7 +18,7 @@ export default function Candidates() {
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
 
   useEffect(() => {
     const fetchCandidates = async () => {

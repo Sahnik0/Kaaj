@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -9,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
 
 export default function SignIn() {
@@ -17,7 +16,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { signIn } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {

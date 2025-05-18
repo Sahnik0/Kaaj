@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
 
 const industries = [
@@ -36,7 +36,7 @@ export default function RecruiterProfile() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const { updateUserProfile, user } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
   const router = useRouter()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

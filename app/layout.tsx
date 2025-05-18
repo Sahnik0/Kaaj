@@ -4,8 +4,8 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { FirebaseProvider } from "@/lib/firebase/firebase-provider"
 import { LanguageProvider } from "@/lib/i18n/language-context"
-import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
+import { RetroToaster } from "@/components/retroui/Toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,10 +23,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider>
-          <LanguageProvider>
+          <LanguageProvider>            
             <FirebaseProvider>
               {children}
-              <Toaster />
+              <RetroToaster />
             </FirebaseProvider>
           </LanguageProvider>
         </ThemeProvider>
