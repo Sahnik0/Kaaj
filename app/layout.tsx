@@ -12,7 +12,6 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Kaaj - Hyperlocal Job Marketplace",
   description: "Find local jobs and services in your area",
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({
