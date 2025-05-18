@@ -4,6 +4,8 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { initializeApp, getApps } from "firebase/app"
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { firebaseConfig } from "./firebase-config"
 import {
   getAuth,
   onAuthStateChanged,
@@ -29,9 +31,63 @@ import {
   onSnapshot,
   orderBy,
   deleteDoc,
+  Timestamp,
 } from "firebase/firestore"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { firebaseConfig } from "./firebase-config"
+
+// Define interfaces for better type safety
+interface Conversation extends DocumentData {
+  id: string;
+  participants: string[];
+  participantNames?: Record<string, string>;
+  lastMessage?: string;
+  lastMessageTime?: Timestamp;
+  lastMessageTimeDate?: Date | null;
+  formattedLastMessageTime?: string;
+  jobId?: string;
+  jobTitle?: string;
+  createdAt?: Timestamp;
+  createdAtDate?: Date | null;
+  formattedCreatedAt?: string;
+  updatedAt?: Timestamp;
+}
+
+interface Message extends DocumentData {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  content: string;
+  timestamp: Timestamp | Date;
+  formattedTime?: string;
+  formattedDate?: string;
+  formattedFullDateTime?: string;
+  smartTime?: string;
+}
+
+interface Rating extends DocumentData {
+  id: string;
+  raterId: string;
+  raterName: string;
+  ratedUserId: string;
+  ratedUserName: string;
+  jobId: string;
+  jobTitle: string;
+  rating: number;
+  review: string;
+  createdAt: Timestamp;
+}
+
+interface Notification extends DocumentData {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: Timestamp;
+  readAt?: Timestamp;
+  [key: string]: any; // For additional properties
+}
 
 // Initialize Firebase only if it hasn't been initialized yet
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
@@ -59,7 +115,8 @@ interface FirebaseContextType {
   getJob: (jobId: string) => Promise<any>
   updateJob: (jobId: string, data: any) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
-  applyToJob: (jobId: string, jobTitle?: string) => Promise<void>
+  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>
+  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
   getApplications: (jobId: string) => Promise<any[]>
   getUserApplications: () => Promise<any[]>
   updateApplicationStatus: (applicationId: string, status: string) => Promise<void>
@@ -74,6 +131,7 @@ interface FirebaseContextType {
   getUsers: () => Promise<any[]>
   getCandidates: () => Promise<any[]>
   getRecruiters: () => Promise<any[]>
+  getUserById: (userId: string) => Promise<any>
   getReportedContent: () => Promise<any[]>
   submitReport: (reportData: any) => Promise<string>
   getJobStats: () => Promise<any>
@@ -225,13 +283,29 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
-  const getAllJobs = async (filters?: any) => {
+    const getAllJobs = async (filters?: any) => {
     try {
-      let q = query(collection(db, "jobs"), where("status", "==", "open"))
-
-      // Apply filters if provided
+      console.log("getAllJobs called with filters:", filters);
+      
+      // Start with a base query for all jobs
+      let q = query(collection(db, "jobs"));
+      
       if (filters) {
+        console.log("Status filter:", filters.status);
+        
+        // Apply explicit status filter if provided
+        if (filters.status === "open") {
+          console.log("Filtering for open jobs only");
+          q = query(q, where("status", "==", "open"));
+        } else if (filters.status === "closed") {
+          console.log("Filtering for closed jobs only");
+          q = query(q, where("status", "==", "closed"));
+        } else {
+          console.log("No status filtering, showing all jobs");
+          // No status filter applied - show all jobs
+        }
+        
+        // Apply other filters
         if (filters.category && filters.category !== "All Categories") {
           q = query(q, where("category", "==", filters.category))
         }
@@ -241,18 +315,28 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         if (filters.jobType && filters.jobType !== "all") {
           q = query(q, where("jobType", "==", filters.jobType))
         }
+      } else {
+        // When no filters provided, for candidates show only open jobs, for others show all
+        if (userRole === "candidate") {
+          console.log("No filters provided, candidate user - defaulting to open jobs only");
+          q = query(q, where("status", "==", "open"));
+        } else {
+          console.log("No filters provided, non-candidate user - showing all jobs");
+        }
       }
-
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map((doc) => ({
+      
+      const querySnapshot = await getDocs(q);
+      const results = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      }));
+      console.log(`Retrieved ${results.length} jobs from Firestore`);
+      return results;
     } catch (error) {
-      console.error("Error getting all jobs:", error)
-      return [] // Return empty array instead of throwing
+      console.error("Error getting all jobs:", error);
+      return []; // Return empty array instead of throwing
     }
-  }
+  };
 
   const getJob = async (jobId: string) => {
     try {
@@ -431,7 +515,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const updateApplicationStatus = async (applicationId: string, status: string) => {
     if (!user) throw new Error("User not authenticated")
 
@@ -468,21 +551,26 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       console.error("Error updating application status:", error)
       throw error
     }
-  }
-
+  };
+  
   const createConversation = async (otherUserId: string, jobId?: string, jobTitle?: string) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
       // Check if conversation already exists
-      const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid))
-
-      const querySnapshot = await getDocs(q)
-      const existingConversation = querySnapshot.docs.find((doc) => {
-        const data = doc.data()
-        return data.participants.includes(otherUserId)
-      })
-
+      const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid));
+      
+      const querySnapshot = await getDocs(q);
+      const existingConversationDoc = querySnapshot.docs.find((doc) => {
+        const data = doc.data();
+        return data.participants.includes(otherUserId);
+      });
+      
+      const existingConversation = existingConversationDoc ? {
+        id: existingConversationDoc.id,
+        ...existingConversationDoc.data()
+      } as Conversation : null;
+      
       if (existingConversation) {
         // Update existing conversation if needed
         if (jobId && jobTitle) {
@@ -492,35 +580,50 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             updatedAt: serverTimestamp(),
           })
         }
+        
+        // Ensure participant names are up to date
+        const participantNames = existingConversation.participantNames || {}
+        
+        // Update current user's name
+        if (!participantNames[user.uid] || participantNames[user.uid] === "You" || participantNames[user.uid] === "Unknown User") {
+          participantNames[user.uid] = user.displayName || "You"
+          await updateDoc(doc(db, "conversations", existingConversation.id), { participantNames })
+        }
+        
+        // Update other user's name if missing
+        if (!participantNames[otherUserId] || participantNames[otherUserId] === "Unknown User") {
+          const otherUserDoc = await getDoc(doc(db, "users", otherUserId))
+          if (otherUserDoc.exists()) {
+            const otherUserData = otherUserDoc.data()
+            participantNames[otherUserId] = otherUserData.displayName || "Unknown User"
+            await updateDoc(doc(db, "conversations", existingConversation.id), { participantNames })
+          }
+        }
+        
         return existingConversation.id
-      }
-
-      // Get other user's name
-      const otherUserDoc = await getDoc(doc(db, "users", otherUserId))
-      const otherUserName = otherUserDoc.exists() ? otherUserDoc.data().displayName : "Unknown User"
-
+      }      // Get other user's name
+      const otherUserDoc = await getDoc(doc(db, "users", otherUserId));
+      const otherUserName = otherUserDoc.exists() ? otherUserDoc.data().displayName : "Unknown User";
+      
       // Create new conversation
-      const participantNames: Record<string, string> = {}
-      participantNames[user.uid] = user.displayName || "You"
-      participantNames[otherUserId] = otherUserName
-
-      const conversationRef = await addDoc(collection(db, "conversations"), {
+      const participantNames: Record<string, string> = {};
+      participantNames[user.uid] = user.displayName || "You";
+      participantNames[otherUserId] = otherUserName;
+        const conversationRef = await addDoc(collection(db, "conversations"), {
         participants: [user.uid, otherUserId],
         participantNames,
         jobId,
         jobTitle,
-        lastMessage: "Start a conversation...",
-        lastMessageTime: serverTimestamp(),
         createdAt: serverTimestamp(),
-      })
-
+        updatedAt: serverTimestamp(),
+      });
+      
       return conversationRef.id
     } catch (error) {
-      console.error("Error creating conversation:", error)
-      throw error
+      console.error("Error creating conversation:", error);
+      throw error;
     }
-  }
-
+  };
   const getConversations = async () => {
     if (!user) return []
 
@@ -529,15 +632,55 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid))
 
       const querySnapshot = await getDocs(q)
-      const conversations = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
+      let conversations = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const lastMessageTimeDate = data.lastMessageTime?.toDate?.() || null;
+        
+        return {
+          id: doc.id,
+          ...data,
+          lastMessageTimeDate,
+          formattedLastMessageTime: lastMessageTimeDate ? getSmartTimeFormat(lastMessageTimeDate) : '',
+          createdAtDate: data.createdAt?.toDate?.() || null,
+          formattedCreatedAt: data.createdAt?.toDate?.() ? 
+            new Intl.DateTimeFormat('en-US', {
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric'
+            }).format(data.createdAt.toDate()) : '',
+        };
+      }) as Conversation[]
 
-      // Sort in memory instead
+      // Ensure participant names are correctly populated
+      for (const conversation of conversations) {
+        // Make sure participantNames exists
+        if (!conversation.participantNames) {
+          conversation.participantNames = {}
+        }
+        
+        // Fill in missing participant names
+        for (const participantId of conversation.participants) {
+          if (!conversation.participantNames[participantId]) {
+            try {
+              const participantDoc = await getDoc(doc(db, "users", participantId))
+              if (participantDoc.exists()) {
+                const userData = participantDoc.data()
+                conversation.participantNames[participantId] = userData.displayName || "Unknown User"
+              } else {
+                conversation.participantNames[participantId] = "Unknown User"
+              }
+            } catch (err) {
+              console.error(`Error fetching participant ${participantId}:`, err)
+              conversation.participantNames[participantId] = "Unknown User"
+            }
+          }
+        }
+      }
+
+      // Sort in memory instead - most recent messages first
       return conversations.sort((a, b) => {
-        const timeA = a.lastMessageTime?.toDate?.() || new Date(0)
-        const timeB = b.lastMessageTime?.toDate?.() || new Date(0)
+        const timeA = a.lastMessageTimeDate || new Date(0)
+        const timeB = b.lastMessageTimeDate || new Date(0)
         return timeB.getTime() - timeA.getTime() // descending order
       })
     } catch (error) {
@@ -545,7 +688,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const getMessages = (conversationId: string, callback: (messages: any[]) => void) => {
     if (!user) return () => {}
 
@@ -553,17 +695,90 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const q = query(collection(db, "conversations", conversationId, "messages"), orderBy("timestamp", "asc"))
 
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const messages = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        callback(messages)
-      })
+        const messages = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          // Format timestamps for better display
+          const timestamp = data.timestamp?.toDate();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp,
+            formattedTime: timestamp ? new Intl.DateTimeFormat('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            }).format(timestamp) : '',
+            formattedDate: timestamp ? new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }).format(timestamp) : '',
+            // Show full datetime for hover
+            formattedFullDateTime: timestamp ? new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: true
+            }).format(timestamp) : '',
+            // Smart display - today's messages show only time, other dates show date
+            smartTime: timestamp ? getSmartTimeFormat(timestamp) : '',
+          };
+        });
+        callback(messages);
+      });
 
-      return unsubscribe
+      return unsubscribe;
     } catch (error) {
-      console.error("Error getting messages:", error)
-      return () => {}
+      console.error("Error getting messages:", error);
+      return () => {};
+    }
+  }
+  
+  // Helper function for smart timestamp formatting
+  const getSmartTimeFormat = (date: Date): string => {
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate() && 
+                    date.getMonth() === now.getMonth() && 
+                    date.getFullYear() === now.getFullYear();
+    
+    const isYesterday = date.getDate() === now.getDate() - 1 && 
+                        date.getMonth() === now.getMonth() && 
+                        date.getFullYear() === now.getFullYear();
+    
+    const isThisYear = date.getFullYear() === now.getFullYear();
+    
+    if (isToday) {
+      return new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
+    } else if (isYesterday) {
+      return `Yesterday, ${new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date)}`;
+    } else if (isThisYear) {
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
+    } else {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
     }
   }
 
@@ -572,22 +787,25 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Create or get conversation
-      const conversationId = await createConversation(recipientId, jobId, jobTitle)
-
-      // Add message to conversation
-      await addDoc(collection(db, "conversations", conversationId, "messages"), {
-        senderId: user.uid,
-        senderName: user.displayName,
-        recipientId,
-        content,
-        timestamp: serverTimestamp(),
-      })
-
-      // Update conversation with last message
-      await updateDoc(doc(db, "conversations", conversationId), {
-        lastMessage: content,
-        lastMessageTime: serverTimestamp(),
-      })
+      const conversationId = await createConversation(recipientId, jobId, jobTitle)      // Only save message if it has actual content (not just whitespace)
+      const trimmedContent = content.trim();
+      
+      if (trimmedContent) {
+        // Add message to conversation
+        await addDoc(collection(db, "conversations", conversationId, "messages"), {
+          senderId: user.uid,
+          senderName: user.displayName,
+          recipientId,
+          content: trimmedContent,
+          timestamp: serverTimestamp(),
+        })
+  
+        // Update conversation with last message
+        await updateDoc(doc(db, "conversations", conversationId), {
+          lastMessage: trimmedContent,
+          lastMessageTime: serverTimestamp(),
+        })
+      }
 
       // Create notification for recipient
       await addDoc(collection(db, "notifications"), {
@@ -638,7 +856,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
-
   const getUserRatings = async () => {
     if (!user) return []
 
@@ -649,7 +866,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      })) as Rating[]
     } catch (error) {
       console.error("Error getting user ratings:", error)
       return [] // Return empty array instead of throwing
@@ -776,18 +993,63 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   }
 
   const getRecruiters = async () => {
-    if (userRole !== "admin") throw new Error("Unauthorized")
+    if (!user || !userRole) return []
 
     try {
-      const q = query(collection(db, "users"), where("role", "==", "recruiter"))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
+      const recruitersQuery = query(collection(db, "users"), where("role", "==", "recruiter"))
+      const recruitersSnapshot = await getDocs(recruitersQuery)
+      const recruitersData = recruitersSnapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt,
+        }
+      })
+
+      return recruitersData
     } catch (error) {
-      console.error("Error getting recruiters:", error)
-      return [] // Return empty array instead of throwing
+      console.error("Error fetching recruiters:", error)
+      return []
+    }
+  }
+  
+  const getUserById = async (userId: string) => {
+    if (!userId) return null
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId))
+      
+      if (!userDoc.exists()) {
+        return null
+      }
+      
+      const userData = userDoc.data()
+      
+      // Calculate average rating for the user
+      const ratingsQuery = query(collection(db, "ratings"), where("ratedUserId", "==", userId))
+      const ratingsSnapshot = await getDocs(ratingsQuery)
+      
+      let totalRating = 0
+      const ratingsCount = ratingsSnapshot.size
+      
+      ratingsSnapshot.forEach((ratingDoc) => {
+        const ratingData = ratingDoc.data()
+        totalRating += ratingData.rating
+      })
+      
+      const averageRating = ratingsCount > 0 ? totalRating / ratingsCount : 0
+      
+      return {
+        id: userDoc.id,
+        ...userData,
+        averageRating,
+        ratingsCount,
+        createdAt: userData.createdAt,
+      }
+    } catch (error) {
+      console.error("Error fetching user by ID:", error)
+      return null
     }
   }
 
@@ -969,7 +1231,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
-
   const getNotifications = async () => {
     if (!user) return []
 
@@ -981,7 +1242,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const notifications = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      })) as Notification[]
 
       // Sort in memory instead
       return notifications
@@ -1010,6 +1271,24 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
+  // Function to check if the current user has already applied to a specific job
+  const checkUserAppliedToJob = async (jobId: string) => {
+    if (!user) return false;
+
+    try {
+      const existingApplicationQuery = query(
+        collection(db, "applications"),
+        where("jobId", "==", jobId),
+        where("candidateId", "==", user.uid)
+      );
+
+      const existingApplicationSnapshot = await getDocs(existingApplicationQuery);
+      return !existingApplicationSnapshot.empty;
+    } catch (error) {
+      console.error("Error checking if user applied to job:", error);
+      return false;
+    }
+  };
 
   const value = {
     user,
@@ -1029,6 +1308,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     updateJob,
     deleteJob,
     applyToJob,
+    checkUserAppliedToJob,
     getApplications,
     getUserApplications,
     updateApplicationStatus,
@@ -1043,6 +1323,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     getUsers,
     getCandidates,
     getRecruiters,
+    getUserById,
     getReportedContent,
     submitReport,
     getJobStats,
@@ -1062,4 +1343,4 @@ export const useFirebase = () => {
     throw new Error("useFirebase must be used within a FirebaseProvider")
   }
   return context
-}
+};

@@ -65,9 +65,7 @@ export default function Dashboard() {
             messages: conversations.length,
             ratings: userProfile?.totalRatings || 0,
             views: jobs.reduce((total, job) => total + (job.views || 0), 0)
-          })
-
-          // Create recent activity from jobs and conversations
+          })          // Create recent activity from jobs and conversations
           const jobActivity = jobs.slice(0, 3).map((job) => ({
             type: "job",
             title: job.title,
@@ -78,14 +76,17 @@ export default function Dashboard() {
             link: `/dashboard/jobs/${job.id}`
           }))
 
-          const messageActivity = conversations.slice(0, 2).map((convo) => ({
-            type: "message",
-            title: convo.otherUserName || "Candidate",
-            description: `New message from ${convo.otherUserName || "a candidate"}`,
-            time: convo.lastMessageTime,
-            icon: MessageSquare,
-            link: `/dashboard/messages/${convo.id}`
-          }))
+          // Only include message activity if there are actual conversations
+          const messageActivity = conversations.length > 0 
+            ? conversations.slice(0, 2).map((convo) => ({
+                type: "message",
+                title: convo.otherUserName || "Candidate",
+                description: `New message from ${convo.otherUserName || "a candidate"}`,
+                time: convo.lastMessageTime,
+                icon: MessageSquare,
+                link: `/dashboard/messages/${convo.id}`
+              }))
+            : []
 
           setRecentActivity([...jobActivity, ...messageActivity].sort((a, b) => {
             return new Date(b.time).getTime() - new Date(a.time).getTime()
@@ -102,9 +103,7 @@ export default function Dashboard() {
             messages: conversations.length,
             ratings: userProfile?.totalRatings || 0,
             views: userProfile?.profileViews || 0
-          })
-
-          // Create recent activity from applications and conversations
+          })          // Create recent activity from applications and conversations
           const applicationActivity = applications.slice(0, 3).map((app) => ({
             type: "application",
             title: app.jobTitle,
@@ -115,14 +114,17 @@ export default function Dashboard() {
             link: `/dashboard/applications/${app.id}`
           }))
 
-          const messageActivity = conversations.slice(0, 2).map((convo) => ({
-            type: "message",
-            title: convo.otherUserName || "Recruiter",
-            description: `New message from ${convo.otherUserName || "a recruiter"}`,
-            time: convo.lastMessageTime,
-            icon: MessageSquare,
-            link: `/dashboard/messages/${convo.id}`
-          }))
+          // Only include message activity if there are actual conversations
+          const messageActivity = conversations.length > 0
+            ? conversations.slice(0, 2).map((convo) => ({
+                type: "message",
+                title: convo.otherUserName || "Recruiter",
+                description: `New message from ${convo.otherUserName || "a recruiter"}`,
+                time: convo.lastMessageTime,
+                icon: MessageSquare,
+                link: `/dashboard/messages/${convo.id}`
+              }))
+            : []
 
           setRecentActivity([...applicationActivity, ...messageActivity].sort((a, b) => {
             return new Date(b.time).getTime() - new Date(a.time).getTime()
