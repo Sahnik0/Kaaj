@@ -28,8 +28,12 @@ type LanguageContextType = {
   t: (key: string) => string
 }
 
-// Create context
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
+// Create context with default values to prevent undefined errors
+const LanguageContext = createContext<LanguageContextType>({
+  language: "en",
+  setLanguage: () => {},
+  t: (key: string) => key
+})
 
 // Provider component
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
@@ -47,6 +51,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   // Translation function
   const t = (key: string): string => {
+    // Safety check for server-side rendering or during initialization
+    if (!translations[language]) {
+      return key;
+    }
     return translations[language][key] || key
   }
 
@@ -66,20 +74,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     t,
   }
 
-  // Only render children after initial mount to prevent hydration mismatch
-  if (!mounted) {
-    return <>{children}</>
-  }
-
+  // Always provide the context, even if we're not mounted yet
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
 }
 
 // Hook to use language context
 export function useLanguage() {
   const context = useContext(LanguageContext)
-  if (context === undefined) {
-    throw new Error("useLanguage must be used within a LanguageProvider")
-  }
+  // We can remove this check since we now provide default values
   return context
 }
 
