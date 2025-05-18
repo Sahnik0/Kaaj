@@ -2,8 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .font-heading {
+    font-family: var(--font-head);
+  }
+  
+  .font-body {
+    font-family: var(--font-sans);
+  }
+}
+
 @layer base {
   :root {
+    --font-head: var(--font-head);
+    --font-sans: var(--font-sans);
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;

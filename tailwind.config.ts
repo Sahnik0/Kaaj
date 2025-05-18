@@ -9,14 +9,17 @@ const config = {
     "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
-  prefix: "",
-  theme: {
+  prefix: "",  theme: {
     container: {
       center: true,
       padding: "2rem",
       screens: {
         "2xl": "1400px",
       },
+    },
+    fontFamily: {
+      sans: ['var(--font-sans)'],
+      heading: ['var(--font-head)'],
     },
     extend: {
       colors: {

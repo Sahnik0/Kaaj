@@ -20,14 +20,16 @@ interface PageHeaderProps {
   title: string
   description?: string
   children?: ReactNode
+  titleClassName?: string
+  descriptionClassName?: string
 }
 
-export function PageHeader({ title, description, children }: PageHeaderProps) {
+export function PageHeader({ title, description, children, titleClassName, descriptionClassName }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between">
       <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        {description && <p className="text-muted-foreground">{description}</p>}
+        <h1 className={cn("text-3xl font-bold tracking-tight", titleClassName)}>{title}</h1>
+        {description && <p className={cn("text-muted-foreground", descriptionClassName)}>{description}</p>}
       </div>
       {children}
     </div>
