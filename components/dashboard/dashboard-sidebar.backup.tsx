@@ -209,7 +209,7 @@ export function DashboardSidebar() {
   // Group menu items by categories
   const mainItems = [
     {
-      title: t("Dashboard"),
+      title: t("dashboard"),
       icon: LayoutDashboard,
       href: "/dashboard",
       show: true,
@@ -218,40 +218,38 @@ export function DashboardSidebar() {
   
   const jobItems = [
     {
-      title: t("My Jobs"),
+      title: t("myJobs"),
       icon: Briefcase,
       href: "/dashboard/jobs",
       show: userRole === "recruiter",
     },
     {
-      title: t("Post Job"),
+      title: t("postJob"),
       icon: PlusCircle,
       href: "/dashboard/post-job",
       show: userRole === "recruiter",
     },
     {
-      title: t("Find Jobs"),
+      title: t("findJobs"),
       icon: Briefcase,
       href: "/dashboard/find-jobs",
       show: userRole === "candidate",
     },
     {
-      title: t("Applications"),
+      title: t("applications"),
       icon: Briefcase,
       href: "/dashboard/applications",
       show: userRole === "candidate",
     },
     {
-      title: t("Candidates"),
+      title: t("candidates"),
       icon: Users,
       href: "/dashboard/candidates",
       show: userRole === "recruiter",
     },
-  ]
-  
-  const communicationItems = [
+  ]    const communicationItems = [
     {
-      title: t("Messages"),
+      title: t("messages"),
       icon: MessageSquare,
       href: "/dashboard/messages",
       show: true,
@@ -261,7 +259,7 @@ export function DashboardSidebar() {
       hasUnread: unreadMessages > 0,
     },
     {
-      title: t("Notifications"),
+      title: t("notifications"),
       icon: Bell,
       href: "/dashboard/notifications",
       show: true,
@@ -274,25 +272,25 @@ export function DashboardSidebar() {
   
   const otherItems = [
     {
-      title: t("Learning Path"),
+      title: t("learningPath"),
       icon: BookOpen,
       href: "/dashboard/learning",
       show: true,
     },
     {
-      title: t("Ratings & Reviews"),
+      title: t("ratingsReviews"),
       icon: Star,
       href: "/dashboard/ratings",
       show: true,
     },
     {
-      title: t("Report Issue"),
+      title: t("reportIssue"),
       icon: AlertTriangle,
       href: "/dashboard/reports",
       show: true,
     },
     {
-      title: t("Admin"),
+      title: t("admin"),
       icon: Settings,
       href: "/dashboard/admin",
       show: userRole === "admin",
@@ -301,12 +299,12 @@ export function DashboardSidebar() {
 
   const profileItems = [
     {
-      title: t("Profile"),
+      title: t("profile"),
       icon: User,
       href: "/dashboard/profile",
     },
     {
-      title: t("Settings"),
+      title: t("settings"),
       icon: Settings,
       href: "/dashboard/settings",
     },
@@ -369,61 +367,29 @@ export function DashboardSidebar() {
                               collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"
                             )}>
                               {item.title}
-                            </span>                          </div>                          <AnimatePresence>
-                            {item.badge && (                              <motion.div
-                                initial={{ scale: 0.8, opacity: 0 }} 
-                                animate={{ 
-                                  scale: [1, 1.1, 1],
-                                  opacity: 1
-                                }}
-                                exit={{ scale: 0.8, opacity: 0 }}
-                                transition={{ 
-                                  duration: 0.5, 
-                                  repeat: item.hasUnread ? Infinity : 0,
-                                  repeatType: "reverse",
-                                  repeatDelay: 2
-                                }}
-                              >
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge className={cn(
-                                        "transition-all duration-200 font-bold", 
-                                        collapsed ? "opacity-0 absolute" : "opacity-100 relative",
-                                        item.badgeColor || "bg-secondary"
-                                      )}>
-                                        {item.badge}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right">
-                                      <p>{item.badgeTooltip || `${item.badge} unread items`}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                            </span>                          </div>                          {item.badge && (
+                            <Badge className={cn(
+                              "transition-all duration-200", 
+                              collapsed ? "opacity-0 absolute" : "opacity-100 relative",
+                              item.badgeColor || "bg-secondary"
+                            )}>
+                              {item.badge}
+                            </Badge>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </TooltipTrigger>                    {collapsed && (
                       <TooltipContent side="right" className="z-50">
                         <div className="flex flex-col">
-                          <span>{item.title}</span>                          <AnimatePresence>
-                            {item.badge && (
-                              <motion.span
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.3, type: "spring", stiffness: 120 }}
-                                className={cn(
-                                  "text-xs font-bold",
-                                  item.hasUnread ? "text-red-500" : "text-gray-500"
-                                )}
-                              >
-                                {item.badgeTooltip || `${item.badge} unread`}
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
+                          <span>{item.title}</span>
+                          {item.badge && (
+                            <span className={cn(
+                              "text-xs font-medium",
+                              item.hasUnread ? "text-red-500" : "text-gray-500"
+                            )}>
+                              {item.badgeTooltip || `${item.badge} unread`}
+                            </span>
+                          )}
                         </div>
                       </TooltipContent>
                     )}
@@ -576,13 +542,13 @@ export function DashboardSidebar() {
                           "font-medium transition-all duration-200", 
                           collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"
                         )}>
-                          {t("Sign Out")}
+                          {t("signOut")}
                         </span>
                       </SidebarMenuButton>
                     </TooltipTrigger>
                     {collapsed && (
                       <TooltipContent side="right" className="z-50">
-                        <span>{t("Sign Out")}</span>
+                        <span>{t("signOut")}</span>
                       </TooltipContent>
                     )}
                   </Tooltip>

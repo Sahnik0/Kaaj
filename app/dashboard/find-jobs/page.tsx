@@ -17,39 +17,50 @@ interface Job {
   location: string
   salary: string
   description: string
-  requirements: string[]
-  postedBy: string
-  postedAt: any
-  status: "active" | "closed"
+  requirements: string[] | string
+  recruiterId: string
+  recruiterName: string
+  status: "open" | "closed"
+  createdAt: any
+  updatedAt: any
+  category?: string
+  jobType?: string
+  budget?: string
+  deadline?: any
+  isTask?: boolean
 }
 
-export default function FindJobsPage() {
-  const { user, firestore } = useFirebase()
+export default function FindJobsPage() {  const { user, getAllJobs, checkUserAppliedToJob } = useFirebase()
   const [jobs, setJobs] = useState<Job[]>([])
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [locationFilter, setLocationFilter] = useState("")
+  const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const { t } = useTranslation()
-
   useEffect(() => {
     async function fetchJobs() {
-      if (!firestore) return
-
       try {
         setLoading(true)
-
-        // Fetch active jobs
-        const jobsCollection = firestore.collection("jobs")
-        const snapshot = await jobsCollection.where("status", "==", "active").get()
-
-        const jobsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Job[]
-
+        // Use the getAllJobs function from the firebase provider
+        const jobsData = await getAllJobs()
         setJobs(jobsData)
         setFilteredJobs(jobsData)
+        
+        // Check which jobs the user has already applied to
+        if (user) {
+          const appliedJobsSet = new Set<string>()
+          
+          // Check each job
+          for (const job of jobsData) {
+            const hasApplied = await checkUserAppliedToJob(job.id)
+            if (hasApplied) {
+              appliedJobsSet.add(job.id)
+            }
+          }
+          
+          setAppliedJobs(appliedJobsSet)
+        }
       } catch (error) {
         console.error("Error fetching jobs:", error)
       } finally {
@@ -58,8 +69,7 @@ export default function FindJobsPage() {
     }
 
     fetchJobs()
-  }, [firestore])
-
+  }, [getAllJobs, checkUserAppliedToJob, user])
   useEffect(() => {
     // Filter jobs based on search term and location
     const filtered = jobs.filter((job) => {
@@ -69,7 +79,10 @@ export default function FindJobsPage() {
         job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
         job.description.toLowerCase().includes(searchTerm.toLowerCase())
 
-      const matchesLocation = locationFilter === "" || job.location.toLowerCase().includes(locationFilter.toLowerCase())
+      const matchesLocation = 
+        locationFilter === "" || 
+        locationFilter === "all" || 
+        job.location.toLowerCase().includes(locationFilter.toLowerCase())
 
       return matchesSearch && matchesLocation
     })
@@ -140,10 +153,9 @@ export default function FindJobsPage() {
                 className="border-2 border-black p-6 rounded-md hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-shadow"
               >
                 <h2 className="text-xl font-bold mb-2">{job.title}</h2>
-                <div className="flex flex-wrap gap-4 mb-4 text-sm">
-                  <div className="flex items-center">
+                <div className="flex flex-wrap gap-4 mb-4 text-sm">                  <div className="flex items-center">
                     <Briefcase className="h-4 w-4 mr-1" />
-                    {job.company}
+                    {job.company || job.recruiterName}
                   </div>
                   <div className="flex items-center">
                     <MapPin className="h-4 w-4 mr-1" />
@@ -152,26 +164,43 @@ export default function FindJobsPage() {
                   <div className="flex items-center">
                     <DollarSign className="h-4 w-4 mr-1" />
                     {job.salary}
-                  </div>
-                </div>
-                <p className="mb-4 line-clamp-3">{job.description}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {job.requirements.slice(0, 3).map((req, index) => (
-                    <span key={index} className="px-2 py-1 bg-gray-100 border-2 border-black rounded-md text-xs">
-                      {req}
-                    </span>
-                  ))}
-                  {job.requirements.length > 3 && (
+                  </div>                </div>
+                <p className="mb-4 line-clamp-3">{job.description}</p>                <div className="flex flex-wrap gap-2 mb-4">
+                  {job.requirements && Array.isArray(job.requirements) ? (
+                    <>
+                      {job.requirements.slice(0, 3).map((req, index) => (
+                        <span key={index} className="px-2 py-1 bg-gray-100 border-2 border-black rounded-md text-xs">
+                          {req}
+                        </span>
+                      ))}
+                      {job.requirements.length > 3 && (
+                        <span className="px-2 py-1 bg-gray-100 border-2 border-black rounded-md text-xs">
+                          +{job.requirements.length - 3} {t("more")}
+                        </span>
+                      )}
+                    </>
+                  ) : job.requirements ? (
                     <span className="px-2 py-1 bg-gray-100 border-2 border-black rounded-md text-xs">
-                      +{job.requirements.length - 3} {t("more")}
+                      {typeof job.requirements === 'string' ? job.requirements : ''}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex justify-between items-center">
+                  <Link href={`/dashboard/jobs/${job.id}`}>
+                    <Button className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px]">
+                      {t("viewDetails")}
+                    </Button>
+                  </Link>
+                  {appliedJobs.has(job.id) && (
+                    <span className="px-3 py-1 bg-green-100 text-green-800 border-2 border-green-800 rounded-md text-sm font-medium flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                      </svg>
+                      Already Applied
                     </span>
                   )}
                 </div>
-                <Link href={`/dashboard/jobs/${job.id}`}>
-                  <Button className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px]">
-                    {t("viewDetails")}
-                  </Button>
-                </Link>
               </div>
             ))}
           </div>

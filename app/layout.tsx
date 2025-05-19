@@ -1,13 +1,25 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Archivo_Black, Space_Grotesk } from "next/font/google"
 import "./globals.css"
 import { FirebaseProvider } from "@/lib/firebase/firebase-provider"
 import { LanguageProvider } from "@/lib/i18n/language-context"
-import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
+import { RetroToaster } from "@/components/retroui/Toaster"
 
-const inter = Inter({ subsets: ["latin"] })
+const archivoBlack = Archivo_Black({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-head",
+  display: "swap",
+});
+ 
+const space = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Kaaj - Hyperlocal Job Marketplace",
@@ -21,12 +33,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${archivoBlack.variable} ${space.variable}`}>
         <ThemeProvider>
-          <LanguageProvider>
+          <LanguageProvider>            
             <FirebaseProvider>
               {children}
-              <Toaster />
+              <RetroToaster />
             </FirebaseProvider>
           </LanguageProvider>
         </ThemeProvider>

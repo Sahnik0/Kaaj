@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { Briefcase, Calendar, CheckCircle, MessageSquare, Star, User, X } from "lucide-react"
 
 export default function JobApplications() {
@@ -24,7 +24,7 @@ export default function JobApplications() {
   const jobId = params.id
   const router = useRouter()
   const { getJob, getApplications, updateApplicationStatus, sendMessage, userRole } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
 
   const [job, setJob] = useState<any>(null)
   const [applications, setApplications] = useState<any[]>([])
@@ -42,12 +42,11 @@ export default function JobApplications() {
 
         const applicationsData = await getApplications(jobId)
         setApplications(applicationsData)
-      } catch (error) {
-        console.error("Error fetching job applications:", error)
+      } catch (error) {        console.error("Error fetching job applications:", error)
         toast({
           title: "Error",
           description: "Failed to load job applications. Please try again.",
-          variant: "destructive",
+          variant: "destructive"
         })
       } finally {
         setLoading(false)
@@ -56,10 +55,9 @@ export default function JobApplications() {
 
     fetchData()
   }, [jobId, getJob, getApplications, toast])
-
-  // Redirect if not a recruiter
+  // Only check if user is a recruiter after loading is complete
   useEffect(() => {
-    if (userRole !== "recruiter" && !loading) {
+    if (!loading && userRole !== null && userRole !== "recruiter") {
       router.push("/dashboard")
     }
   }, [userRole, loading, router])
@@ -115,11 +113,10 @@ export default function JobApplications() {
   const handleContactCandidate = (candidateId: string) => {
     router.push(`/dashboard/messages?recipient=${candidateId}`)
   }
-
   const handleViewCandidateProfile = (candidateId: string) => {
+    // Navigate to the candidate profile page using the new dynamic route
     router.push(`/dashboard/candidates/${candidateId}`)
   }
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -128,6 +125,7 @@ export default function JobApplications() {
     )
   }
 
+  // Case where job data couldn't be fetched or user doesn't have permission
   if (!job) {
     return (
       <div className="space-y-6">
@@ -140,6 +138,11 @@ export default function JobApplications() {
         </Button>
       </div>
     )
+  }
+  
+  // Extra check to make sure we have applications data
+  if (!applications) {
+    setApplications([]);
   }
 
   const pendingApplications = applications.filter((app) => app.status === "pending")

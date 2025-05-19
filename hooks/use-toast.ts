@@ -9,7 +9,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 2000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -42,8 +42,7 @@ type Action =
   | {
       type: ActionType["UPDATE_TOAST"]
       toast: Partial<ToasterToast>
-    }
-  | {
+    }  | {
       type: ActionType["DISMISS_TOAST"]
       toastId?: ToasterToast["id"]
     }
@@ -82,16 +81,16 @@ export const reducer = (state: State, action: Action): State => {
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       }
 
-    case "UPDATE_TOAST":
-      return {
+    case "UPDATE_TOAST":      return {
         ...state,
         toasts: state.toasts.map((t) =>
           t.id === action.toast.id ? { ...t, ...action.toast } : t
         ),
       }
-
+      
     case "DISMISS_TOAST": {
       const { toastId } = action
+      console.log('Dismissing toast with ID:', toastId)
 
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity

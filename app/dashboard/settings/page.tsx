@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useTheme } from "next-themes"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { Moon, Sun, Bell, Globe, Shield, Eye } from "lucide-react"
 
 export default function Settings() {
   const { theme, setTheme } = useTheme()
   const { userProfile, updateUserProfile } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
   const [loading, setLoading] = useState(false)
 
   const [settings, setSettings] = useState({

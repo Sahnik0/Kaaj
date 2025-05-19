@@ -4,6 +4,8 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { initializeApp, getApps } from "firebase/app"
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { firebaseConfig } from "./firebase-config"
 import {
   getAuth,
   onAuthStateChanged,
@@ -29,9 +31,63 @@ import {
   onSnapshot,
   orderBy,
   deleteDoc,
+  Timestamp,
 } from "firebase/firestore"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { firebaseConfig } from "./firebase-config"
+
+// Define interfaces for better type safety
+interface Conversation extends DocumentData {
+  id: string;
+  participants: string[];
+  participantNames?: Record<string, string>;
+  lastMessage?: string;
+  lastMessageTime?: Timestamp;
+  lastMessageTimeDate?: Date | null;
+  formattedLastMessageTime?: string;
+  jobId?: string;
+  jobTitle?: string;
+  createdAt?: Timestamp;
+  createdAtDate?: Date | null;
+  formattedCreatedAt?: string;
+  updatedAt?: Timestamp;
+}
+
+interface Message extends DocumentData {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  content: string;
+  timestamp: Timestamp | Date;
+  formattedTime?: string;
+  formattedDate?: string;
+  formattedFullDateTime?: string;
+  smartTime?: string;
+}
+
+interface Rating extends DocumentData {
+  id: string;
+  raterId: string;
+  raterName: string;
+  ratedUserId: string;
+  ratedUserName: string;
+  jobId: string;
+  jobTitle: string;
+  rating: number;
+  review: string;
+  createdAt: Timestamp;
+}
+
+interface Notification extends DocumentData {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: Timestamp;
+  readAt?: Timestamp;
+  [key: string]: any; // For additional properties
+}
 
 // Initialize Firebase only if it hasn't been initialized yet
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
@@ -57,15 +113,20 @@ interface FirebaseContextType {
   getUserJobs: () => Promise<any[]>
   getAllJobs: (filters?: any) => Promise<any[]>
   getJob: (jobId: string) => Promise<any>
+  getJobById: (jobId: string) => Promise<any> // Alias for getJob
   updateJob: (jobId: string, data: any) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
-  applyToJob: (jobId: string, jobTitle?: string) => Promise<void>
+  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>
+  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
   getApplications: (jobId: string) => Promise<any[]>
   getUserApplications: () => Promise<any[]>
+  getApplicationById: (applicationId: string) => Promise<any>
   updateApplicationStatus: (applicationId: string, status: string) => Promise<void>
   getConversations: () => Promise<any[]>
-  getMessages: (conversationId: string, callback: (messages: any[]) => void) => () => void
+  getConversationById: (conversationId: string) => Promise<any>
+  getMessages: (conversationId: string, callback: (messages: any[]) => void) => any
   sendMessage: (recipientId: string, content: string, jobId?: string, jobTitle?: string) => Promise<void>
+  createConversation: (otherUserId: string, jobId?: string, jobTitle?: string) => Promise<string>
   getLearningResources: () => Promise<any[]>
   addLearningResource: (resourceData: any) => Promise<string>
   getUserRatings: () => Promise<any[]>
@@ -74,6 +135,7 @@ interface FirebaseContextType {
   getUsers: () => Promise<any[]>
   getCandidates: () => Promise<any[]>
   getRecruiters: () => Promise<any[]>
+  getUserById: (userId: string) => Promise<any>
   getReportedContent: () => Promise<any[]>
   submitReport: (reportData: any) => Promise<string>
   getJobStats: () => Promise<any>
@@ -81,7 +143,12 @@ interface FirebaseContextType {
   updateUserStatus: (userId: string, status: string, reason: string) => Promise<void>
   uploadProfileImage: (file: File) => Promise<string>
   getNotifications: () => Promise<any[]>
+  getUnreadNotificationsCount: () => Promise<number>
   markNotificationAsRead: (notificationId: string) => Promise<void>
+  markNotificationAsUnread: (notificationId: string) => Promise<void>
+  markAllConversationMessagesAsRead: (conversationId: string) => Promise<boolean | void>
+  markConversationMessageAsRead: (conversationId: string, messageId: string) => Promise<void>
+  markConversationMessageAsUnread: (conversationId: string, messageId: string) => Promise<void>
 }
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined)
@@ -219,19 +286,39 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
-    } catch (error) {
+      }))    } catch (error) {
       console.error("Error getting user jobs:", error)
       return [] // Return empty array instead of throwing
     }
   }
-
-  const getAllJobs = async (filters?: any) => {
+  
+  const getAllJobs = async (filters?: {
+    status?: string;
+    recruiterId?: string;
+    category?: string;
+    locationType?: string;
+    jobType?: string;
+  }) => {
     try {
-      let q = query(collection(db, "jobs"), where("status", "==", "open"))
-
-      // Apply filters if provided
-      if (filters) {
+      console.log("getAllJobs called with filters:", filters);
+      
+      // Start with a base query for all jobs
+      let q = query(collection(db, "jobs"));
+        if (filters) {
+        console.log("Status filter:", filters.status);
+        
+        // Apply explicit status filter if provided
+        if (filters.status === "open") {
+          console.log("Filtering for open jobs only");
+          q = query(q, where("status", "==", "open"));
+        } else if (filters.status === "closed") {
+          console.log("Filtering for closed jobs only");
+          q = query(q, where("status", "==", "closed"));
+        } else {
+          console.log("No status filtering, showing all jobs");
+          // No status filter applied (all) - show all jobs regardless of status
+        }
+          // Apply other filters
         if (filters.category && filters.category !== "All Categories") {
           q = query(q, where("category", "==", filters.category))
         }
@@ -241,18 +328,32 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         if (filters.jobType && filters.jobType !== "all") {
           q = query(q, where("jobType", "==", filters.jobType))
         }
+        // If recruiterId is provided (e.g., when a recruiter views their jobs)
+        if (filters.recruiterId) {
+          q = query(q, where("recruiterId", "==", filters.recruiterId))
+        }
+      } else {
+        // When no filters provided, for candidates show only open jobs, for others show all
+        if (userRole === "candidate") {
+          console.log("No filters provided, candidate user - defaulting to open jobs only");
+          q = query(q, where("status", "==", "open"));
+        } else {
+          console.log("No filters provided, non-candidate user - showing all jobs");
+        }
       }
-
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map((doc) => ({
+      
+      const querySnapshot = await getDocs(q);
+      const results = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      }));
+      console.log(`Retrieved ${results.length} jobs from Firestore`);
+      return results;
     } catch (error) {
-      console.error("Error getting all jobs:", error)
-      return [] // Return empty array instead of throwing
+      console.error("Error getting all jobs:", error);
+      return []; // Return empty array instead of throwing
     }
-  }
+  };
 
   const getJob = async (jobId: string) => {
     try {
@@ -431,7 +532,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const updateApplicationStatus = async (applicationId: string, status: string) => {
     if (!user) throw new Error("User not authenticated")
 
@@ -468,21 +568,26 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       console.error("Error updating application status:", error)
       throw error
     }
-  }
-
+  };
+  
   const createConversation = async (otherUserId: string, jobId?: string, jobTitle?: string) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
       // Check if conversation already exists
-      const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid))
-
-      const querySnapshot = await getDocs(q)
-      const existingConversation = querySnapshot.docs.find((doc) => {
-        const data = doc.data()
-        return data.participants.includes(otherUserId)
-      })
-
+      const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid));
+      
+      const querySnapshot = await getDocs(q);
+      const existingConversationDoc = querySnapshot.docs.find((doc) => {
+        const data = doc.data();
+        return data.participants.includes(otherUserId);
+      });
+      
+      const existingConversation = existingConversationDoc ? {
+        id: existingConversationDoc.id,
+        ...existingConversationDoc.data()
+      } as Conversation : null;
+      
       if (existingConversation) {
         // Update existing conversation if needed
         if (jobId && jobTitle) {
@@ -492,35 +597,50 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             updatedAt: serverTimestamp(),
           })
         }
+        
+        // Ensure participant names are up to date
+        const participantNames = existingConversation.participantNames || {}
+        
+        // Update current user's name
+        if (!participantNames[user.uid] || participantNames[user.uid] === "You" || participantNames[user.uid] === "Unknown User") {
+          participantNames[user.uid] = user.displayName || "You"
+          await updateDoc(doc(db, "conversations", existingConversation.id), { participantNames })
+        }
+        
+        // Update other user's name if missing
+        if (!participantNames[otherUserId] || participantNames[otherUserId] === "Unknown User") {
+          const otherUserDoc = await getDoc(doc(db, "users", otherUserId))
+          if (otherUserDoc.exists()) {
+            const otherUserData = otherUserDoc.data()
+            participantNames[otherUserId] = otherUserData.displayName || "Unknown User"
+            await updateDoc(doc(db, "conversations", existingConversation.id), { participantNames })
+          }
+        }
+        
         return existingConversation.id
-      }
-
-      // Get other user's name
-      const otherUserDoc = await getDoc(doc(db, "users", otherUserId))
-      const otherUserName = otherUserDoc.exists() ? otherUserDoc.data().displayName : "Unknown User"
-
+      }      // Get other user's name
+      const otherUserDoc = await getDoc(doc(db, "users", otherUserId));
+      const otherUserName = otherUserDoc.exists() ? otherUserDoc.data().displayName : "Unknown User";
+      
       // Create new conversation
-      const participantNames: Record<string, string> = {}
-      participantNames[user.uid] = user.displayName || "You"
-      participantNames[otherUserId] = otherUserName
-
-      const conversationRef = await addDoc(collection(db, "conversations"), {
+      const participantNames: Record<string, string> = {};
+      participantNames[user.uid] = user.displayName || "You";
+      participantNames[otherUserId] = otherUserName;
+        const conversationRef = await addDoc(collection(db, "conversations"), {
         participants: [user.uid, otherUserId],
         participantNames,
         jobId,
         jobTitle,
-        lastMessage: "Start a conversation...",
-        lastMessageTime: serverTimestamp(),
         createdAt: serverTimestamp(),
-      })
-
+        updatedAt: serverTimestamp(),
+      });
+      
       return conversationRef.id
     } catch (error) {
-      console.error("Error creating conversation:", error)
-      throw error
+      console.error("Error creating conversation:", error);
+      throw error;
     }
-  }
-
+  };
   const getConversations = async () => {
     if (!user) return []
 
@@ -529,15 +649,55 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const q = query(collection(db, "conversations"), where("participants", "array-contains", user.uid))
 
       const querySnapshot = await getDocs(q)
-      const conversations = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
+      let conversations = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const lastMessageTimeDate = data.lastMessageTime?.toDate?.() || null;
+        
+        return {
+          id: doc.id,
+          ...data,
+          lastMessageTimeDate,
+          formattedLastMessageTime: lastMessageTimeDate ? getSmartTimeFormat(lastMessageTimeDate) : '',
+          createdAtDate: data.createdAt?.toDate?.() || null,
+          formattedCreatedAt: data.createdAt?.toDate?.() ? 
+            new Intl.DateTimeFormat('en-US', {
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric'
+            }).format(data.createdAt.toDate()) : '',
+        };
+      }) as Conversation[]
 
-      // Sort in memory instead
+      // Ensure participant names are correctly populated
+      for (const conversation of conversations) {
+        // Make sure participantNames exists
+        if (!conversation.participantNames) {
+          conversation.participantNames = {}
+        }
+        
+        // Fill in missing participant names
+        for (const participantId of conversation.participants) {
+          if (!conversation.participantNames[participantId]) {
+            try {
+              const participantDoc = await getDoc(doc(db, "users", participantId))
+              if (participantDoc.exists()) {
+                const userData = participantDoc.data()
+                conversation.participantNames[participantId] = userData.displayName || "Unknown User"
+              } else {
+                conversation.participantNames[participantId] = "Unknown User"
+              }
+            } catch (err) {
+              console.error(`Error fetching participant ${participantId}:`, err)
+              conversation.participantNames[participantId] = "Unknown User"
+            }
+          }
+        }
+      }
+
+      // Sort in memory instead - most recent messages first
       return conversations.sort((a, b) => {
-        const timeA = a.lastMessageTime?.toDate?.() || new Date(0)
-        const timeB = b.lastMessageTime?.toDate?.() || new Date(0)
+        const timeA = a.lastMessageTimeDate || new Date(0)
+        const timeB = b.lastMessageTimeDate || new Date(0)
         return timeB.getTime() - timeA.getTime() // descending order
       })
     } catch (error) {
@@ -545,7 +705,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const getMessages = (conversationId: string, callback: (messages: any[]) => void) => {
     if (!user) return () => {}
 
@@ -553,17 +712,90 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const q = query(collection(db, "conversations", conversationId, "messages"), orderBy("timestamp", "asc"))
 
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const messages = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        callback(messages)
-      })
+        const messages = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          // Format timestamps for better display
+          const timestamp = data.timestamp?.toDate();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp,
+            formattedTime: timestamp ? new Intl.DateTimeFormat('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            }).format(timestamp) : '',
+            formattedDate: timestamp ? new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }).format(timestamp) : '',
+            // Show full datetime for hover
+            formattedFullDateTime: timestamp ? new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: true
+            }).format(timestamp) : '',
+            // Smart display - today's messages show only time, other dates show date
+            smartTime: timestamp ? getSmartTimeFormat(timestamp) : '',
+          };
+        });
+        callback(messages);
+      });
 
-      return unsubscribe
+      return unsubscribe;
     } catch (error) {
-      console.error("Error getting messages:", error)
-      return () => {}
+      console.error("Error getting messages:", error);
+      return () => {};
+    }
+  }
+  
+  // Helper function for smart timestamp formatting
+  const getSmartTimeFormat = (date: Date): string => {
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate() && 
+                    date.getMonth() === now.getMonth() && 
+                    date.getFullYear() === now.getFullYear();
+    
+    const isYesterday = date.getDate() === now.getDate() - 1 && 
+                        date.getMonth() === now.getMonth() && 
+                        date.getFullYear() === now.getFullYear();
+    
+    const isThisYear = date.getFullYear() === now.getFullYear();
+    
+    if (isToday) {
+      return new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
+    } else if (isYesterday) {
+      return `Yesterday, ${new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date)}`;
+    } else if (isThisYear) {
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
+    } else {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date);
     }
   }
 
@@ -572,22 +804,27 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Create or get conversation
-      const conversationId = await createConversation(recipientId, jobId, jobTitle)
-
-      // Add message to conversation
-      await addDoc(collection(db, "conversations", conversationId, "messages"), {
-        senderId: user.uid,
-        senderName: user.displayName,
-        recipientId,
-        content,
-        timestamp: serverTimestamp(),
-      })
-
-      // Update conversation with last message
-      await updateDoc(doc(db, "conversations", conversationId), {
-        lastMessage: content,
-        lastMessageTime: serverTimestamp(),
-      })
+      const conversationId = await createConversation(recipientId, jobId, jobTitle)      // Only save message if it has actual content (not just whitespace)
+      const trimmedContent = content.trim();
+        if (trimmedContent) {
+        // Add message to conversation
+        await addDoc(collection(db, "conversations", conversationId, "messages"), {
+          senderId: user.uid,
+          senderName: user.displayName,
+          recipientId,
+          content: trimmedContent,
+          timestamp: serverTimestamp(),
+          read: false
+        })
+  
+        // Update conversation with last message
+        await updateDoc(doc(db, "conversations", conversationId), {
+          lastMessage: trimmedContent,
+          lastMessageTime: serverTimestamp(),
+          lastMessageSenderId: user.uid,
+          lastMessageRead: false,
+        })
+      }
 
       // Create notification for recipient
       await addDoc(collection(db, "notifications"), {
@@ -638,7 +875,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
-
   const getUserRatings = async () => {
     if (!user) return []
 
@@ -649,7 +885,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      })) as Rating[]
     } catch (error) {
       console.error("Error getting user ratings:", error)
       return [] // Return empty array instead of throwing
@@ -672,11 +908,21 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const submitRating = async (ratingData: any) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
+      // Check if the job is completed (closed)
+      if (ratingData.jobId) {
+        const jobDoc = await getDoc(doc(db, "jobs", ratingData.jobId))
+        if (!jobDoc.exists()) throw new Error("Job not found")
+        
+        const jobData = jobDoc.data()
+        if (jobData.status !== "closed") {
+          throw new Error("You can only rate users after the job has been completed")
+        }
+      }
+      
       // Check if user has already rated this user for this job
       const q = query(
         collection(db, "ratings"),
@@ -776,18 +1022,63 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   }
 
   const getRecruiters = async () => {
-    if (userRole !== "admin") throw new Error("Unauthorized")
+    if (!user || !userRole) return []
 
     try {
-      const q = query(collection(db, "users"), where("role", "==", "recruiter"))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
+      const recruitersQuery = query(collection(db, "users"), where("role", "==", "recruiter"))
+      const recruitersSnapshot = await getDocs(recruitersQuery)
+      const recruitersData = recruitersSnapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt,
+        }
+      })
+
+      return recruitersData
     } catch (error) {
-      console.error("Error getting recruiters:", error)
-      return [] // Return empty array instead of throwing
+      console.error("Error fetching recruiters:", error)
+      return []
+    }
+  }
+  
+  const getUserById = async (userId: string) => {
+    if (!userId) return null
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId))
+      
+      if (!userDoc.exists()) {
+        return null
+      }
+      
+      const userData = userDoc.data()
+      
+      // Calculate average rating for the user
+      const ratingsQuery = query(collection(db, "ratings"), where("ratedUserId", "==", userId))
+      const ratingsSnapshot = await getDocs(ratingsQuery)
+      
+      let totalRating = 0
+      const ratingsCount = ratingsSnapshot.size
+      
+      ratingsSnapshot.forEach((ratingDoc) => {
+        const ratingData = ratingDoc.data()
+        totalRating += ratingData.rating
+      })
+      
+      const averageRating = ratingsCount > 0 ? totalRating / ratingsCount : 0
+      
+      return {
+        id: userDoc.id,
+        ...userData,
+        averageRating,
+        ratingsCount,
+        createdAt: userData.createdAt,
+      }
+    } catch (error) {
+      console.error("Error fetching user by ID:", error)
+      return null
     }
   }
 
@@ -969,7 +1260,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
-
   const getNotifications = async () => {
     if (!user) return []
 
@@ -981,7 +1271,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       const notifications = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
+      })) as Notification[]
 
       // Sort in memory instead
       return notifications
@@ -994,6 +1284,25 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error getting notifications:", error)
       return [] // Return empty array instead of throwing
+    }
+  }
+
+  const getUnreadNotificationsCount = async () => {
+    if (!user) return 0
+
+    try {
+      // Query for unread notifications
+      const q = query(
+        collection(db, "notifications"), 
+        where("userId", "==", user.uid),
+        where("read", "==", false)
+      )
+
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.length
+    } catch (error) {
+      console.error("Error getting unread notifications count:", error)
+      return 0
     }
   }
 
@@ -1010,7 +1319,251 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
+  
+  const markNotificationAsUnread = async (notificationId: string) => {
+    if (!user) throw new Error("User not authenticated")
+    
+    try {
+      await updateDoc(doc(db, "notifications", notificationId), {
+        read: false,
+        readAt: null,
+      })
+    } catch (error) {
+      console.error("Error marking notification as unread:", error)
+      throw error
+    }
+  }
+  const markAllConversationMessagesAsRead = async (conversationId: string) => {
+    if (!user) throw new Error("User not authenticated")
 
+    try {      // First, update the conversation's lastMessageRead status
+      const conversationRef = doc(db, "conversations", conversationId);
+      await updateDoc(conversationRef, {
+        lastMessageRead: true,
+        lastMessageUpdatedAt: serverTimestamp() // Add timestamp to trigger real-time updates
+      });
+      
+      // Get all unread messages where the current user is the recipient
+      const q = query(
+        collection(db, "conversations", conversationId, "messages"),
+        where("recipientId", "==", user.uid),
+        where("read", "==", false)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      // Update each message to mark it as read
+      const updatePromises = querySnapshot.docs.map(doc => 
+        updateDoc(doc.ref, {
+          read: true,
+          readAt: serverTimestamp()
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Delete any message notifications for this conversation
+      const notificationsQuery = query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        where("type", "==", "message"),
+        where("conversationId", "==", conversationId),
+        where("read", "==", false)
+      );
+      
+      const notificationsSnapshot = await getDocs(notificationsQuery);
+      
+      // Delete message notifications since they're now read in the conversation
+      // This ensures notification bubbles are removed when messages are viewed
+      const deletePromises = notificationsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      return true;    } catch (error) {
+      console.error("Error marking all messages as read:", error);
+      throw error; // Rethrow to allow proper error handling by callers
+      throw error;
+    }
+  }
+    const markConversationMessageAsRead = async (conversationId: string, messageId: string) => {
+    if (!user) throw new Error("User not authenticated")
+
+    try {
+      // Get the message to find the sender
+      const messageDoc = await getDoc(doc(db, "conversations", conversationId, "messages", messageId));
+      if (!messageDoc.exists()) throw new Error("Message not found");
+      
+      const messageData = messageDoc.data();
+      const senderId = messageData.senderId;
+      
+      // Mark the message as read
+      await updateDoc(messageDoc.ref, {
+        read: true,
+        readAt: serverTimestamp()
+      });
+      
+      // Check if this was the last unread message
+      const unreadQuery = query(
+        collection(db, "conversations", conversationId, "messages"),
+        where("recipientId", "==", user.uid),
+        where("read", "==", false)
+      );
+      
+      const unreadSnapshot = await getDocs(unreadQuery);
+      
+      // If there are no more unread messages, update the conversation
+      if (unreadSnapshot.empty) {
+        await updateDoc(doc(db, "conversations", conversationId), {
+          lastMessageRead: true
+        });
+        
+        // Delete any message notifications for this conversation
+        const notificationsQuery = query(
+          collection(db, "notifications"),
+          where("userId", "==", user.uid),
+          where("type", "==", "message"),
+          where("conversationId", "==", conversationId),
+          where("read", "==", false)
+        );
+        
+        const notificationsSnapshot = await getDocs(notificationsQuery);
+        
+        // Delete message notifications since they're now read in the conversation
+        const deletePromises = notificationsSnapshot.docs.map(doc => 
+          deleteDoc(doc.ref)
+        );
+        
+        await Promise.all(deletePromises);
+      }
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+      throw error;
+    }
+  }
+    const markConversationMessageAsUnread = async (conversationId: string, messageId: string) => {
+    if (!user) throw new Error("User not authenticated")
+
+    try {
+      // Get the message details first
+      const messageDoc = await getDoc(doc(db, "conversations", conversationId, "messages", messageId));
+      if (!messageDoc.exists()) throw new Error("Message not found");
+      
+      const messageData = messageDoc.data();
+      const senderId = messageData.senderId;
+      
+      // Mark the message as unread
+      await updateDoc(messageDoc.ref, {
+        read: false,
+        readAt: null
+      });
+      
+      // Update the conversation to show unread messages
+      await updateDoc(doc(db, "conversations", conversationId), {
+        lastMessageRead: false
+      });
+      
+      // Check if a notification already exists for this message
+      const notificationQuery = query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        where("type", "==", "message"),
+        where("conversationId", "==", conversationId),
+        where("senderId", "==", senderId)
+      );
+      
+      const notificationSnapshot = await getDocs(notificationQuery);
+      
+      // If no notification exists, create a new one
+      if (notificationSnapshot.empty) {
+        // Get sender's name
+        const senderDoc = await getDoc(doc(db, "users", senderId));
+        const senderName = senderDoc.exists() ? senderDoc.data().displayName : "Someone";
+        
+        // Create a new notification
+        await addDoc(collection(db, "notifications"), {
+          userId: user.uid,
+          type: "message",
+          title: "Unread Message",
+          message: `You have an unread message from ${senderName}`,
+          read: false,
+          createdAt: serverTimestamp(),
+          conversationId,
+          senderId: senderId,
+        });
+      }
+    } catch (error) {
+      console.error("Error marking message as unread:", error);
+      throw error;
+    }
+  }
+  
+  // Function to check if the current user has already applied to a specific job
+  const checkUserAppliedToJob = async (jobId: string) => {
+    if (!user) return false;
+
+    try {
+      const existingApplicationQuery = query(
+        collection(db, "applications"),
+        where("jobId", "==", jobId),
+        where("candidateId", "==", user.uid)
+      );
+
+      const existingApplicationSnapshot = await getDocs(existingApplicationQuery);
+      return !existingApplicationSnapshot.empty;
+    } catch (error) {
+      console.error("Error checking if user applied to job:", error);
+      return false;
+    }
+  };
+  // Get application by ID
+  const getApplicationById = async (applicationId: string) => {
+    if (!user) return null;
+    
+    try {
+      const applicationRef = doc(db, "applications", applicationId);
+      const applicationDoc = await getDoc(applicationRef);
+      
+      if (!applicationDoc.exists()) {
+        return null;
+      }
+      
+      return {
+        id: applicationDoc.id,
+        ...applicationDoc.data()
+      };
+    } catch (error) {
+      console.error("Error getting application:", error);
+      return null;
+    }
+  };
+  
+  // Get conversation by ID
+  const getConversationById = async (conversationId: string) => {
+    if (!user) return null;
+    
+    try {
+      const conversationRef = doc(db, "conversations", conversationId);
+      const conversationDoc = await getDoc(conversationRef);
+      
+      if (!conversationDoc.exists()) {
+        return null;
+      }
+      
+      return {
+        id: conversationDoc.id,
+        ...conversationDoc.data()
+      };
+    } catch (error) {
+      console.error("Error getting conversation:", error);
+      return null;
+    }
+  };
+  
+  // Alias for getJob for consistent naming
+  const getJobById = getJob;
+  
   const value = {
     user,
     userRole,
@@ -1026,13 +1579,16 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     getUserJobs,
     getAllJobs,
     getJob,
+    getJobById,
     updateJob,
     deleteJob,
-    applyToJob,
+    applyToJob,    checkUserAppliedToJob,
     getApplications,
     getUserApplications,
+    getApplicationById,
     updateApplicationStatus,
     getConversations,
+    getConversationById,
     getMessages,
     sendMessage,
     getLearningResources,
@@ -1043,14 +1599,19 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     getUsers,
     getCandidates,
     getRecruiters,
+    getUserById,
     getReportedContent,
     submitReport,
     getJobStats,
     getUserStats,
-    updateUserStatus,
-    uploadProfileImage,
+    updateUserStatus,    uploadProfileImage,
     getNotifications,
+    getUnreadNotificationsCount,
     markNotificationAsRead,
+    markNotificationAsUnread,
+    markAllConversationMessagesAsRead,
+    markConversationMessageAsRead,
+    markConversationMessageAsUnread,
   }
 
   return <FirebaseContext.Provider value={value}>{children}</FirebaseContext.Provider>
@@ -1062,4 +1623,4 @@ export const useFirebase = () => {
     throw new Error("useFirebase must be used within a FirebaseProvider")
   }
   return context
-}
+};

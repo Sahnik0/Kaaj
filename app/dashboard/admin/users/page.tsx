@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
 import { Ban, Check, MoreHorizontal, Search, Shield, User } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 
 export default function AdminUsers() {
   const { userRole, isAdmin, getUsers, updateUserStatus } = useFirebase()
@@ -35,7 +35,7 @@ export default function AdminUsers() {
   const [statusReason, setStatusReason] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const router = useRouter()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
 
   useEffect(() => {
     const fetchUsers = async () => {

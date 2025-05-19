@@ -7,15 +7,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
-import { Briefcase, Calendar, Clock, MapPin, MessageSquare } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { Briefcase, Calendar, Clock, MapPin, MessageSquare, InfoIcon } from "lucide-react"
+import { useRetroToast } from "@/hooks/use-retro-toast"
+import { Alert } from "@/components/retroui/Alert"
 
 export default function Applications() {
   const { user, userRole, getUserApplications } = useFirebase()
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -89,68 +90,68 @@ export default function Applications() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6 space-y-6">
-          {applications.length === 0 ? (
-            <Card className="border-kaaj-100 doodle-card">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium">No applications yet</h3>
-                <p className="text-sm text-muted-foreground mt-1">
+        <TabsContent value="all" className="mt-6 space-y-6">          {applications.length === 0 ? (
+            <Alert status="info" className="flex items-start p-8">
+              <InfoIcon className="h-5 w-5 mr-4 mt-1" />
+              <div className="flex-1">
+                <Alert.Title className="text-lg mb-2">No applications yet</Alert.Title>
+                <Alert.Description className="mb-4">
                   You haven't applied to any jobs yet. Browse available jobs to get started.
-                </p>
+                </Alert.Description>
                 <Button
                   onClick={() => router.push("/dashboard/find-jobs")}
-                  className="mt-4 bg-kaaj-500 hover:bg-kaaj-600"
+                  className="mt-2 bg-kaaj-500 hover:bg-kaaj-600"
                 >
                   Find Jobs
                 </Button>
-              </CardContent>
-            </Card>
-          ) : (
+              </div>
+            </Alert>
+          ): (
             renderApplicationsList(applications)
           )}
         </TabsContent>
 
-        <TabsContent value="pending" className="mt-6 space-y-6">
-          {pendingApplications.length === 0 ? (
-            <Card className="border-kaaj-100 doodle-card">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium">No pending applications</h3>
-                <p className="text-sm text-muted-foreground mt-1">
+        <TabsContent value="pending" className="mt-6 space-y-6">          {pendingApplications.length === 0 ? (
+            <Alert status="info" className="flex items-start p-8">
+              <InfoIcon className="h-5 w-5 mr-4 mt-1" />
+              <div>
+                <Alert.Title className="text-lg mb-2">No pending applications</Alert.Title>
+                <Alert.Description>
                   You don't have any pending job applications at the moment.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
+                </Alert.Description>
+              </div>
+            </Alert>
+          ): (
             renderApplicationsList(pendingApplications)
           )}
         </TabsContent>
 
-        <TabsContent value="accepted" className="mt-6 space-y-6">
-          {acceptedApplications.length === 0 ? (
-            <Card className="border-kaaj-100 doodle-card">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium">No accepted applications</h3>
-                <p className="text-sm text-muted-foreground mt-1">You don't have any accepted job applications yet.</p>
-              </CardContent>
-            </Card>
-          ) : (
+        <TabsContent value="accepted" className="mt-6 space-y-6">          {acceptedApplications.length === 0 ? (
+            <Alert status="info" className="flex items-start p-8">
+              <InfoIcon className="h-5 w-5 mr-4 mt-1" />
+              <div>
+                <Alert.Title className="text-lg mb-2">No accepted applications</Alert.Title>
+                <Alert.Description>
+                  You don't have any accepted job applications yet.
+                </Alert.Description>
+              </div>
+            </Alert>
+          ): (
             renderApplicationsList(acceptedApplications)
           )}
         </TabsContent>
 
-        <TabsContent value="rejected" className="mt-6 space-y-6">
-          {rejectedApplications.length === 0 ? (
-            <Card className="border-kaaj-100 doodle-card">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Briefcase className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium">No rejected applications</h3>
-                <p className="text-sm text-muted-foreground mt-1">You don't have any rejected job applications.</p>
-              </CardContent>
-            </Card>
-          ) : (
+        <TabsContent value="rejected" className="mt-6 space-y-6">          {rejectedApplications.length === 0 ? (
+            <Alert status="info" className="flex items-start p-8">
+              <InfoIcon className="h-5 w-5 mr-4 mt-1" />
+              <div>
+                <Alert.Title className="text-lg mb-2">No rejected applications</Alert.Title>
+                <Alert.Description>
+                  You don't have any rejected job applications.
+                </Alert.Description>
+              </div>
+            </Alert>
+          ): (
             renderApplicationsList(rejectedApplications)
           )}
         </TabsContent>

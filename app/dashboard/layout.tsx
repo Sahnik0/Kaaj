@@ -30,7 +30,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     )
   }
-
   return (
     <SidebarProvider>
       <div className="flex flex-col min-h-screen bg-[url('/grid-pattern.svg')] bg-repeat">
@@ -39,8 +38,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="hidden md:block">
             <DashboardSidebar />
           </div>
-          <main className="flex-1 container mx-auto p-4 md:p-6">
-            {children}
+          <main className="flex-1 flex justify-center">
+            <div className="w-full max-w-7xl px-4 md:px-8 py-6 md:py-8">
+              {children}
+            </div>
           </main>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
 
 export default function SignUp() {
@@ -19,7 +19,7 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { signUp } = useFirebase()
-  const { toast } = useToast()
+  const { toast } = useRetroToast()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {

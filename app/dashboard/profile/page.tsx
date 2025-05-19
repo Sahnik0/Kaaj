@@ -64,7 +64,6 @@ export default function Profile() {
       setIsLoading(false)
     }
   }
-
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -72,11 +71,35 @@ export default function Profile() {
       .join("")
       .toUpperCase()
   }
+  
+  useEffect(() => {
+    // If the user is authenticated but profile isn't loaded, attempt to get the profile
+    if (user && !userProfile) {
+      // First try to fetch the profile directly without reloading
+      const fetchProfile = async () => {
+        try {
+          // If the profile exists but is empty, wait a moment and reload
+          setTimeout(() => {
+            if (user && !userProfile) {
+              window.location.reload()
+            }
+          }, 3000)
+        } catch (error) {
+          console.error("Error fetching profile:", error)
+          // If there's an error, try reloading after a delay
+          setTimeout(() => window.location.reload(), 2000)
+        }
+      }
+      
+      fetchProfile()
+    }
+  }, [user, userProfile])
 
   if (!user || !userProfile) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-kaaj-500 border-t-transparent"></div>
+        <p className="ml-3 text-kaaj-600">Loading profile...</p>
       </div>
     )
   }
@@ -115,12 +138,11 @@ export default function Profile() {
             <CardContent className="pt-20 pb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold">{userProfile.displayName || user.displayName}</h2>
-                  <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                    <Badge variant="outline" className="capitalize">
+                  <h2 className="text-2xl font-bold">{userProfile.displayName || user.displayName}</h2>                  <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                    <Badge className="capitalize border border-kaaj-200">
                       {userProfile.role || "User"}
                     </Badge>
-                    {userProfile.verified && <Badge className="badge-verified">Verified</Badge>}
+                    {userProfile.verified && <Badge className="badge-verified bg-green-100 text-green-800 border border-green-300">Verified</Badge>}
                   </div>
                 </div>
                 <Button
@@ -163,8 +185,7 @@ export default function Profile() {
                       <h3 className="text-lg font-medium mb-2 doodle-heading">Skills</h3>
                       <div className="flex flex-wrap gap-2">
                         {userProfile.skills && userProfile.skills.length > 0 ? (
-                          userProfile.skills.map((skill: string) => (
-                            <Badge key={skill} variant="secondary" className="bg-kaaj-100 text-kaaj-700">
+                          userProfile.skills.map((skill: string) => (                            <Badge key={skill} className="bg-kaaj-100 text-kaaj-700 border border-kaaj-200">
                               {skill}
                             </Badge>
                           ))
@@ -302,12 +323,10 @@ export default function Profile() {
                     </div>
                   )}
                 </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button
+                <CardFooter className="flex justify-between">                  <Button
                     type="button"
-                    variant="outline"
                     onClick={() => setIsEditing(false)}
-                    className="border-kaaj-200"
+                    className="border-kaaj-200 bg-white"
                   >
                     Cancel
                   </Button>
@@ -351,14 +370,12 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <div className="flex-1">
-                  <Button
-                    variant="outline"
-                    className="w-full border-kaaj-200 text-kaaj-700 hover:bg-kaaj-50"
-                    onClick={() => router.push("/dashboard/ratings")}
-                  >
-                    View All Reviews
-                  </Button>
+                <div className="flex-1">                <Button
+                  className="w-full bg-white border border-kaaj-200 text-kaaj-700 hover:bg-kaaj-50"
+                  onClick={() => router.push("/dashboard/ratings")}
+                >
+                  View All Reviews
+                </Button>
                 </div>
               </div>
             </CardContent>
@@ -379,10 +396,8 @@ export default function Profile() {
               </div>
 
               <div className="space-y-2">
-                <Label>Password</Label>
-                <Button
-                  variant="outline"
-                  className="w-full border-kaaj-200 text-kaaj-700 hover:bg-kaaj-50"
+                <Label>Password</Label>                <Button
+                  className="w-full bg-white border border-kaaj-200 text-kaaj-700 hover:bg-kaaj-50"
                   onClick={() => router.push("/auth/reset-password")}
                 >
                   Change Password
@@ -390,9 +405,8 @@ export default function Profile() {
               </div>
 
               <div className="space-y-2">
-                <Label>Account Type</Label>
-                <div className="flex items-center gap-2 p-2 border rounded-md border-kaaj-200">
-                  <Badge variant="outline" className="capitalize">
+                <Label>Account Type</Label>                <div className="flex items-center gap-2 p-2 border rounded-md border-kaaj-200">
+                  <Badge className="capitalize border border-kaaj-200">
                     {userProfile.role || "User"}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
@@ -416,7 +430,7 @@ export default function Profile() {
               <p className="text-sm text-muted-foreground mb-4">
                 Once you delete your account, there is no going back. Please be certain.
               </p>
-              <Button variant="destructive">Delete Account</Button>
+              <Button className="bg-red-500 text-white hover:bg-red-600">Delete Account</Button>
             </CardContent>
           </Card>
         </TabsContent>
