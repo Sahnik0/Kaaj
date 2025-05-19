@@ -21,15 +21,15 @@ export default function CandidateProfile() {
   const [candidate, setCandidate] = useState<any>(null)
   const [ratings, setRatings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     const fetchCandidateData = async () => {
       try {
         const candidateData = await getUserById(candidateId)
         setCandidate(candidateData)
-
-        // If we wanted to fetch ratings for this candidate, we would do it here
-        // This would need a function like getRatingsByUserId(candidateId) in firebase-provider
+        
+        // We only need to fetch received ratings for the candidate
+        // The user stats like averageRating and ratingsCount are already included
+        // in the candidate data from getUserById
       } catch (error) {
         console.error("Error fetching candidate details:", error)
         toast({

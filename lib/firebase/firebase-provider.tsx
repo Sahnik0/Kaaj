@@ -899,11 +899,21 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return [] // Return empty array instead of throwing
     }
   }
-
   const submitRating = async (ratingData: any) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
+      // Check if the job is completed (closed)
+      if (ratingData.jobId) {
+        const jobDoc = await getDoc(doc(db, "jobs", ratingData.jobId))
+        if (!jobDoc.exists()) throw new Error("Job not found")
+        
+        const jobData = jobDoc.data()
+        if (jobData.status !== "closed") {
+          throw new Error("You can only rate users after the job has been completed")
+        }
+      }
+      
       // Check if user has already rated this user for this job
       const q = query(
         collection(db, "ratings"),

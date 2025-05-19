@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
+import { useRetroToast } from "@/hooks/use-retro-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -24,8 +25,9 @@ import { cn } from "@/lib/utils"
 import { PageContainer, PageHeader } from "@/components/dashboard/page-container"
 
 export default function Ratings() {
-  const { user, userRole, getUserRatings, getRatingsByUser, submitRating, getApplications, getUserApplications } =
+  const { user, userRole, getUserRatings, getRatingsByUser, submitRating, getApplications, getUserApplications, getJobs } =
     useFirebase()
+  const { toast } = useRetroToast()
   const [myRatings, setMyRatings] = useState<any[]>([])
   const [receivedRatings, setReceivedRatings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,18 +87,29 @@ export default function Ratings() {
 
     fetchRatings()
   }, [getUserRatings, getRatingsByUser])
-
-  // Get users that the current user has worked with
+  // Get users that the current user has worked with on completed jobs
   const getEligibleUsers = async () => {
     try {
       const eligibleUsers: any[] = []
       const processedUserIds = new Set()
+      const completedJobIds = new Set()
+      
+      // First, get all completed (closed) jobs
+      const jobs = await getJobs()
+      jobs.filter(job => job.status === "closed").forEach(job => {
+        completedJobIds.add(job.id)
+      })
 
       if (userRole === "recruiter") {
-        // Get candidates who applied to recruiter's jobs
+        // Get candidates who applied to recruiter's completed jobs
         const applications = await getApplications("all") // Get all applications for all jobs
+        
+        // Filter applications by completed jobs
+        const completedJobApplications = applications.filter(app => 
+          completedJobIds.has(app.jobId) && app.status === "accepted"
+        )
 
-        applications.forEach((app) => {
+        completedJobApplications.forEach((app) => {
           if (!processedUserIds.has(app.candidateId)) {
             processedUserIds.add(app.candidateId)
             eligibleUsers.push({
@@ -109,10 +122,15 @@ export default function Ratings() {
           }
         })
       } else if (userRole === "candidate") {
-        // Get recruiters whose jobs the candidate applied to
+        // Get recruiters whose completed jobs the candidate applied to
         const applications = await getUserApplications()
+        
+        // Filter applications by completed jobs and accepted status
+        const completedJobApplications = applications.filter(app => 
+          completedJobIds.has(app.jobId) && app.status === "accepted"
+        )
 
-        applications.forEach((app) => {
+        completedJobApplications.forEach((app) => {
           if (!processedUserIds.has(app.recruiterId)) {
             processedUserIds.add(app.recruiterId)
             eligibleUsers.push({
@@ -134,7 +152,6 @@ export default function Ratings() {
       return []
     }
   }
-
   const handleRatingSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -165,8 +182,21 @@ export default function Ratings() {
         jobTitle: "",
       })
       setDialogOpen(false)
-    } catch (error) {
+      
+      // Show success toast
+      toast({
+        title: "Rating Submitted",
+        description: "Your rating has been submitted successfully.",
+      })
+    } catch (error: any) {
       console.error("Error submitting rating:", error)
+      
+      // Show error toast with the specific error message
+      toast({
+        title: "Error Submitting Rating",
+        description: error?.message || "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setSubmitting(false)
     }
@@ -189,31 +219,25 @@ export default function Ratings() {
     const sum = ratings.reduce((acc, curr) => acc + curr.rating, 0)
     return (sum / ratings.length).toFixed(1)
   }
-
   const renderStars = (rating: number) => {
     return (
-      <div className="flex">
+      <div className="rating-stars" style={{ transform: 'scale(0.8)' }}>
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-4 w-4 ${star <= rating ? "fill-kaaj-500 text-kaaj-500" : "text-muted-foreground"}`}
+            className={star <= rating ? "filled" : ""}
           />
         ))}
       </div>
     )
   }
-
   const renderRatingStars = () => {
     return (
-      <div className="rating-stars flex mb-2">
+      <div className="rating-stars mb-2">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-6 w-6 cursor-pointer ${
-              star <= (hoverRating || newRating.rating) 
-                ? "fill-kaaj-500 text-kaaj-500" 
-                : "text-kaaj-300"
-            }`}
+            className={star <= (hoverRating || newRating.rating) ? "filled" : ""}
             onClick={() => setNewRating({ ...newRating, rating: star })}
             onMouseEnter={() => setHoverRating(star)}
             onMouseLeave={() => setHoverRating(0)}

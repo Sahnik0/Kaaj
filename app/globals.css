@@ -376,27 +376,32 @@
 /* Rating stars */
 .rating-stars {
   display: inline-flex;
+  gap: 0.25rem;
 }
 
 .rating-stars svg {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
   fill: transparent;
-  stroke: hsl(var(--muted-foreground));
-  stroke-width: 1.5;
+  stroke: currentColor;
+  stroke-width: 2;
   cursor: pointer;
   transition: all 0.2s ease;
+  color: #D1D5DB; /* Light gray default */
 }
 
 .rating-stars svg.filled {
-  fill: hsl(var(--primary));
-  stroke: hsl(var(--primary));
+  fill: #FFB800;  /* Gold color for filled stars */
+  stroke: #FFB800;
+  color: #FFB800;
 }
 
 .rating-stars svg:hover,
 .rating-stars svg.hover {
-  fill: hsl(var(--primary) / 0.5);
-  stroke: hsl(var(--primary));
+  fill: #FFD700;  /* Brighter gold for hover */
+  stroke: #FFD700;
+  color: #FFD700;
+  transform: scale(1.1);
 }
 
 /* Badge styles */
