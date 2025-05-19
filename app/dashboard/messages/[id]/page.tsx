@@ -33,6 +33,16 @@ export default function ConversationPage({ params }: ConversationProps) {
   const { t } = useLanguage()
   const { toast } = useRetroToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Helper function to update conversation read status
+  const updateConversationReadStatus = (isRead: boolean) => {
+    if (conversation) {
+      setConversation((prev: any) => ({
+        ...prev,
+        lastMessageRead: isRead
+      }));
+    }
+  };
+
   // Fetch conversation and messages
   useEffect(() => {
     async function fetchData() {
@@ -81,12 +91,85 @@ export default function ConversationPage({ params }: ConversationProps) {
     fetchData()
   }, [user, id, getConversationById, router, toast])
 
-  // Set up real-time listener for new messages
+  // Mark messages as read when the component mounts or conversation changes
+  useEffect(() => {
+    if (user && id && conversation) {
+      // If the last message is from the other user and is unread
+      if (conversation.lastMessageSenderId !== user.uid && 
+          conversation.lastMessageRead === false) {
+        
+        // Update local state first for immediate feedback
+        updateConversationReadStatus(true);
+        
+        // Call server function with a small delay to avoid too many calls
+        const timer = setTimeout(() => {
+          markAllConversationMessagesAsRead(id)
+            .catch(error => {
+              console.error("Error marking messages as read:", error);
+              // Revert UI if operation fails
+              updateConversationReadStatus(false);
+            });
+        }, 200);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user, id, conversation, markAllConversationMessagesAsRead]);
+
+  // Set up real-time listener for new messages with automatic read status updating
   useEffect(() => {
     if (!user || !id) return () => {}
     
+    let readStatusTimeout: NodeJS.Timeout | null = null;
+    
+    // Immediately mark conversation as read when it's opened
+    if (conversation && 
+        conversation.lastMessageSenderId !== user.uid && 
+        conversation.lastMessageRead === false) {      // Update local state first for immediate visual feedback
+      setConversation((prev: any) => ({
+        ...prev,
+        lastMessageRead: true
+      }));
+      
+      // Then update in Firebase (with small delay for better UX)
+      readStatusTimeout = setTimeout(() => {
+        markAllConversationMessagesAsRead(id).catch(error => {
+          console.error("Error marking conversation as read on load:", error);
+        });
+      }, 100);
+    }
+    
     const unsubscribe = getMessages(id, (updatedMessages) => {
-      setMessages(updatedMessages)
+      setMessages(updatedMessages);
+      
+      // If there are any unread messages from the other person, mark them as read
+      const hasUnreadFromOthers = updatedMessages.some(
+        msg => msg.senderId !== user.uid && msg.read === false
+      );
+      
+      if (hasUnreadFromOthers) {
+        // Clear any previous timeout
+        if (readStatusTimeout) {
+          clearTimeout(readStatusTimeout);
+        }
+          // Update conversation state immediately for better UX
+        setConversation((prev: any) => ({
+          ...prev,
+          lastMessageRead: true
+        }));
+        
+        // Use a small delay to ensure the UI updates first
+        readStatusTimeout = setTimeout(() => {
+          markAllConversationMessagesAsRead(id)
+            .then(() => {
+              // Messages marked as read successfully
+              console.log("Automatically marked incoming messages as read");
+            })
+            .catch(error => {
+              console.error("Error automatically marking messages as read:", error);
+            });
+        }, 300); // Short delay for better UI experience
+      }
     })
     
     return () => {
@@ -94,7 +177,7 @@ export default function ConversationPage({ params }: ConversationProps) {
         unsubscribe()
       }
     }
-  }, [user, id, getMessages])
+  }, [user, id, getMessages, markAllConversationMessagesAsRead])
   
   // Access check - only participants should see this conversation
   useEffect(() => {
@@ -110,18 +193,78 @@ export default function ConversationPage({ params }: ConversationProps) {
         router.push("/dashboard/messages")
       }
     }
-  }, [conversation, user, loading, router, toast])  // Mark messages as read when the user opens the conversation - only once when conversation data is loaded
+  }, [conversation, user, loading, router, toast])
+    // Mark messages as read when the user opens the conversation - only once when conversation data loads
+  // Plus mark messages as read when new messages arrive and the conversation is open
   useEffect(() => {
     if (user && id && conversation) {
-      // Only call mark as read if there are unread messages (lastMessageRead is false)
+      // Only call mark as read if:
+      // 1. The last message is from the other user (not current user)
+      // 2. The last message is marked as unread
       if (conversation.lastMessageSenderId !== user.uid && conversation.lastMessageRead === false) {
+        // Immediately update conversation state to give instant visual feedback
+        setConversation((prevConversation: any) => ({
+          ...prevConversation,
+          lastMessageRead: true
+        }));
+        
+        // Then send the update to server
         markAllConversationMessagesAsRead(id)
           .catch(error => {
             console.error("Error marking messages as read:", error);
+            // Revert UI if operation fails
+            setConversation(prevConversation => ({
+              ...prevConversation,
+              lastMessageRead: false
+            }));
           });
       }
     }
   }, [user, id, conversation, markAllConversationMessagesAsRead]);
+    
+  // Enhanced version: Mark messages as read when new messages arrive and user is currently viewing the conversation
+  useEffect(() => {
+    if (user && id && messages.length > 0 && !loading) {
+      // Find unread messages from the other user
+      const unreadMessages = messages.filter(msg => 
+        msg.senderId !== user.uid && msg.read === false
+      );
+      
+      // If there are unread messages, mark them as read immediately in the UI
+      if (unreadMessages.length > 0) {
+        // Update messages locally first for immediate visual feedback
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.senderId !== user.uid && msg.read === false
+              ? { ...msg, read: true }
+              : msg
+          )
+        );
+          // Update conversation state too
+        setConversation(prevConversation => ({
+          ...prevConversation,
+          lastMessageRead: true
+        }));
+        
+        // Add debouncing to prevent rapid consecutive API calls to the server
+        const debounceTimeout = setTimeout(() => {
+          markAllConversationMessagesAsRead(id)
+            .then(() => {
+              // Successfully marked messages as read - notifications should be deleted automatically
+              console.log(`Marked ${unreadMessages.length} messages as read`);
+            })
+            .catch(error => {
+              console.error("Error marking new messages as read:", error);
+            });
+        }, 300); // 300ms debounce
+        
+        // Cleanup timeout on component unmount or when dependencies change
+        return () => {
+          clearTimeout(debounceTimeout);
+        };
+      }
+    }
+  }, [user, id, messages, loading, markAllConversationMessagesAsRead]);
   
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -197,7 +340,8 @@ export default function ConversationPage({ params }: ConversationProps) {
         </div>
 
         {/* Messages area */}
-        <div className="flex flex-col p-4 space-y-4 overflow-y-auto h-[calc(100%-8rem)]">          {messages.length === 0 ? (
+        <div className="flex flex-col p-4 space-y-4 overflow-y-auto h-[calc(100%-8rem)]">
+          {messages.length === 0 ? (
             <div className="text-center text-gray-500 mt-8">
               {t("noMessages")}
             </div>
@@ -207,17 +351,16 @@ export default function ConversationPage({ params }: ConversationProps) {
               const messageDate = message.timestamp?.toDate 
                 ? message.timestamp.toDate() 
                 : new Date(message.timestamp)
-              
-              return (                
+              return (
                 <div 
-                  key={message.id} 
+                  key={message.id}
                   className={cn(
                     "max-w-[70%] p-3 rounded-lg relative group",
                     isSender 
-                      ? "ml-auto bg-yellow-300 border-2 border-black" 
-                      : "bg-white border-2 border-black"
+                      ? "ml-auto bg-yellow-300 border-2 border-black shadow-sm" 
+                      : "bg-white border-2 border-black shadow-sm"
                   )}
-                >                  
+                >
                   <p>{message.content || message.text}</p>
                   <div className="flex justify-between items-center mt-1">
                     <p className={cn(
@@ -225,37 +368,42 @@ export default function ConversationPage({ params }: ConversationProps) {
                       isSender ? "text-gray-700" : "text-gray-500"
                     )}>
                       {formatDistance(messageDate, new Date(), { addSuffix: true })}
-                    </p>                    {/* Read/unread status for messages I sent */}
+                    </p>
+                    {/* Read/unread status for messages I sent - Enhanced version with better visuals */}
                     {isSender && (
                       <div className="flex items-center gap-1">
-                        <motion.span 
-                          key={`status-${message.id}-${message.read ? 'read' : 'sent'}`}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className={cn(
-                            "text-xs flex items-center gap-1",
-                            message.read ? "text-green-600" : "text-gray-500"
-                          )}
-                        >
-                          {message.read ? (
-                            <>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 6L9 17l-5-5" />
-                              </svg>
-                              <span>Read</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M5 12h14" />
-                              </svg>
-                              <span>Sent</span>
-                            </>
-                          )}
-                        </motion.span>
+                        <AnimatePresence mode="wait">
+                          <motion.span 
+                            key={`status-${message.id}-${message.read ? 'read' : 'sent'}`}
+                            initial={{ opacity: 0, y: 5, scale: 0.9 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -5, scale: 0.9 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
+                            className={cn(
+                              "text-xs flex items-center gap-1 font-medium rounded-full",
+                              message.read ? "text-green-600" : "text-gray-500"
+                            )}
+                          >
+                            {message.read ? (
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                                  <path d="M20 6L9 17l-5-5" />
+                                </svg>
+                                <span className="font-medium">Read</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                </svg>
+                                <span className="font-medium">Sent</span>
+                              </>
+                            )}
+                          </motion.span>
+                        </AnimatePresence>
                       </div>
-                    )}                    {/* Action to toggle read/unread for messages I received */}
+                    )}
+                    {/* Action to toggle read/unread for messages I received */}
                     {!isSender && (
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <AnimatePresence mode="wait">

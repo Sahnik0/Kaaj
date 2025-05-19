@@ -116,15 +116,17 @@ interface FirebaseContextType {
   getJobById: (jobId: string) => Promise<any> // Alias for getJob
   updateJob: (jobId: string, data: any) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
-  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>,  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
+  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>
+  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
   getApplications: (jobId: string) => Promise<any[]>
   getUserApplications: () => Promise<any[]>
   getApplicationById: (applicationId: string) => Promise<any>
   updateApplicationStatus: (applicationId: string, status: string) => Promise<void>
   getConversations: () => Promise<any[]>
   getConversationById: (conversationId: string) => Promise<any>
-  getMessages: (conversationId: string, callback?: (messages: any[]) => void) => any
+  getMessages: (conversationId: string, callback: (messages: any[]) => void) => any
   sendMessage: (recipientId: string, content: string, jobId?: string, jobTitle?: string) => Promise<void>
+  createConversation: (otherUserId: string, jobId?: string, jobTitle?: string) => Promise<string>
   getLearningResources: () => Promise<any[]>
   addLearningResource: (resourceData: any) => Promise<string>
   getUserRatings: () => Promise<any[]>
@@ -140,11 +142,11 @@ interface FirebaseContextType {
   getUserStats: () => Promise<any>
   updateUserStatus: (userId: string, status: string, reason: string) => Promise<void>
   uploadProfileImage: (file: File) => Promise<string>
-  getNotifications: () => Promise<any[]>  
+  getNotifications: () => Promise<any[]>
   getUnreadNotificationsCount: () => Promise<number>
   markNotificationAsRead: (notificationId: string) => Promise<void>
   markNotificationAsUnread: (notificationId: string) => Promise<void>
-  markAllConversationMessagesAsRead: (conversationId: string) => Promise<void>
+  markAllConversationMessagesAsRead: (conversationId: string) => Promise<boolean | void>
   markConversationMessageAsRead: (conversationId: string, messageId: string) => Promise<void>
   markConversationMessageAsUnread: (conversationId: string, messageId: string) => Promise<void>
 }
@@ -1331,15 +1333,14 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
-
   const markAllConversationMessagesAsRead = async (conversationId: string) => {
     if (!user) throw new Error("User not authenticated")
 
-    try {
-      // First, update the conversation's lastMessageRead status
+    try {      // First, update the conversation's lastMessageRead status
       const conversationRef = doc(db, "conversations", conversationId);
       await updateDoc(conversationRef, {
-        lastMessageRead: true
+        lastMessageRead: true,
+        lastMessageUpdatedAt: serverTimestamp() // Add timestamp to trigger real-time updates
       });
       
       // Get all unread messages where the current user is the recipient
@@ -1361,18 +1362,44 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       
       await Promise.all(updatePromises);
       
-    } catch (error) {
+      // Delete any message notifications for this conversation
+      const notificationsQuery = query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        where("type", "==", "message"),
+        where("conversationId", "==", conversationId),
+        where("read", "==", false)
+      );
+      
+      const notificationsSnapshot = await getDocs(notificationsQuery);
+      
+      // Delete message notifications since they're now read in the conversation
+      // This ensures notification bubbles are removed when messages are viewed
+      const deletePromises = notificationsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      return true;    } catch (error) {
       console.error("Error marking all messages as read:", error);
+      throw error; // Rethrow to allow proper error handling by callers
       throw error;
     }
   }
-  
-  const markConversationMessageAsRead = async (conversationId: string, messageId: string) => {
+    const markConversationMessageAsRead = async (conversationId: string, messageId: string) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
-      const messageRef = doc(db, "conversations", conversationId, "messages", messageId);
-      await updateDoc(messageRef, {
+      // Get the message to find the sender
+      const messageDoc = await getDoc(doc(db, "conversations", conversationId, "messages", messageId));
+      if (!messageDoc.exists()) throw new Error("Message not found");
+      
+      const messageData = messageDoc.data();
+      const senderId = messageData.senderId;
+      
+      // Mark the message as read
+      await updateDoc(messageDoc.ref, {
         read: true,
         readAt: serverTimestamp()
       });
@@ -1391,19 +1418,43 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         await updateDoc(doc(db, "conversations", conversationId), {
           lastMessageRead: true
         });
+        
+        // Delete any message notifications for this conversation
+        const notificationsQuery = query(
+          collection(db, "notifications"),
+          where("userId", "==", user.uid),
+          where("type", "==", "message"),
+          where("conversationId", "==", conversationId),
+          where("read", "==", false)
+        );
+        
+        const notificationsSnapshot = await getDocs(notificationsQuery);
+        
+        // Delete message notifications since they're now read in the conversation
+        const deletePromises = notificationsSnapshot.docs.map(doc => 
+          deleteDoc(doc.ref)
+        );
+        
+        await Promise.all(deletePromises);
       }
     } catch (error) {
       console.error("Error marking message as read:", error);
       throw error;
     }
   }
-  
-  const markConversationMessageAsUnread = async (conversationId: string, messageId: string) => {
+    const markConversationMessageAsUnread = async (conversationId: string, messageId: string) => {
     if (!user) throw new Error("User not authenticated")
 
     try {
-      const messageRef = doc(db, "conversations", conversationId, "messages", messageId);
-      await updateDoc(messageRef, {
+      // Get the message details first
+      const messageDoc = await getDoc(doc(db, "conversations", conversationId, "messages", messageId));
+      if (!messageDoc.exists()) throw new Error("Message not found");
+      
+      const messageData = messageDoc.data();
+      const senderId = messageData.senderId;
+      
+      // Mark the message as unread
+      await updateDoc(messageDoc.ref, {
         read: false,
         readAt: null
       });
@@ -1412,6 +1463,36 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       await updateDoc(doc(db, "conversations", conversationId), {
         lastMessageRead: false
       });
+      
+      // Check if a notification already exists for this message
+      const notificationQuery = query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        where("type", "==", "message"),
+        where("conversationId", "==", conversationId),
+        where("senderId", "==", senderId)
+      );
+      
+      const notificationSnapshot = await getDocs(notificationQuery);
+      
+      // If no notification exists, create a new one
+      if (notificationSnapshot.empty) {
+        // Get sender's name
+        const senderDoc = await getDoc(doc(db, "users", senderId));
+        const senderName = senderDoc.exists() ? senderDoc.data().displayName : "Someone";
+        
+        // Create a new notification
+        await addDoc(collection(db, "notifications"), {
+          userId: user.uid,
+          type: "message",
+          title: "Unread Message",
+          message: `You have an unread message from ${senderName}`,
+          read: false,
+          createdAt: serverTimestamp(),
+          conversationId,
+          senderId: senderId,
+        });
+      }
     } catch (error) {
       console.error("Error marking message as unread:", error);
       throw error;

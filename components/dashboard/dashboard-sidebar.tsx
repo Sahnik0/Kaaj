@@ -370,20 +370,36 @@ export function DashboardSidebar() {
                             )}>
                               {item.title}
                             </span>                          </div>                          <AnimatePresence>
-                            {item.badge && (
-                              <motion.div
+                            {item.badge && (                              <motion.div
                                 initial={{ scale: 0.8, opacity: 0 }} 
-                                animate={{ scale: 1, opacity: 1 }}
+                                animate={{ 
+                                  scale: [1, 1.1, 1],
+                                  opacity: 1
+                                }}
                                 exit={{ scale: 0.8, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
+                                transition={{ 
+                                  duration: 0.5, 
+                                  repeat: item.hasUnread ? Infinity : 0,
+                                  repeatType: "reverse",
+                                  repeatDelay: 2
+                                }}
                               >
-                                <Badge className={cn(
-                                  "transition-all duration-200", 
-                                  collapsed ? "opacity-0 absolute" : "opacity-100 relative",
-                                  item.badgeColor || "bg-secondary"
-                                )}>
-                                  {item.badge}
-                                </Badge>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge className={cn(
+                                        "transition-all duration-200 font-bold", 
+                                        collapsed ? "opacity-0 absolute" : "opacity-100 relative",
+                                        item.badgeColor || "bg-secondary"
+                                      )}>
+                                        {item.badge}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right">
+                                      <p>{item.badgeTooltip || `${item.badge} unread items`}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               </motion.div>
                             )}
                           </AnimatePresence>
@@ -392,16 +408,15 @@ export function DashboardSidebar() {
                     </TooltipTrigger>                    {collapsed && (
                       <TooltipContent side="right" className="z-50">
                         <div className="flex flex-col">
-                          <span>{item.title}</span>
-                          <AnimatePresence>
+                          <span>{item.title}</span>                          <AnimatePresence>
                             {item.badge && (
                               <motion.span
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: "auto", opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
+                                transition={{ duration: 0.3, type: "spring", stiffness: 120 }}
                                 className={cn(
-                                  "text-xs font-medium",
+                                  "text-xs font-bold",
                                   item.hasUnread ? "text-red-500" : "text-gray-500"
                                 )}
                               >
@@ -561,7 +576,7 @@ export function DashboardSidebar() {
                           "font-medium transition-all duration-200", 
                           collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"
                         )}>
-                          {t("signOut")}
+                          {t("Sign Out")}
                         </span>
                       </SidebarMenuButton>
                     </TooltipTrigger>

@@ -14,7 +14,7 @@ import { PageContainer, PageHeader } from "@/components/dashboard/page-container
 import { cn } from "@/lib/utils"
 
 export default function Messages() {
-  const { user, getConversations, getMessages, sendMessage, createConversation } = useFirebase()
+  const { user, getConversations, getMessages, sendMessage, createConversation, markAllConversationMessagesAsRead } = useFirebase()
   const [conversations, setConversations] = useState<any[]>([])
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
@@ -137,22 +137,112 @@ export default function Messages() {
     
     setFilteredConversations(filtered)
   }, [searchQuery, conversations])
-  useEffect(() => {
+    useEffect(() => {
     let unsubscribe = () => {}
+    let messageLoadCompleted = false;
+    let readStatusUpdateTimeout: NodeJS.Timeout | null = null;
 
     if (selectedConversation) {
+      // First, immediately update the UI to mark as read (for best UX)
+      if (selectedConversation.lastMessageSenderId !== user?.uid && 
+          selectedConversation.lastMessageRead === false) {
+        // Update local state first before even loading messages
+        updateConversationReadStatus(selectedConversation.id, true);
+      }
+      
       unsubscribe = getMessages(selectedConversation.id, (data) => {
-        setMessages(data)
-      })      
+        setMessages(data);
+        messageLoadCompleted = true;
+        
+        // Clear any pending timeout to avoid duplicate calls
+        if (readStatusUpdateTimeout) {
+          clearTimeout(readStatusUpdateTimeout);
+        }
+        
+        // After messages are loaded, if there were unread messages from the other user,
+        // ensure they're marked as read both in local state and on the server
+        if (selectedConversation.lastMessageSenderId !== user?.uid && 
+            (selectedConversation.lastMessageRead === false || 
+             data.some(msg => msg.senderId !== user?.uid && msg.read === false))) {
+          
+          // Add a small delay to ensure UI rendering is complete
+          readStatusUpdateTimeout = setTimeout(() => {
+            // Update conversation in the local state again for redundancy
+            updateConversationReadStatus(selectedConversation.id, true);
+            
+            // Call the Firebase function to persist changes and remove notifications
+            markAllConversationMessagesAsRead(selectedConversation.id)
+              .catch(error => {
+                console.error("Error marking conversation messages as read:", error);
+              });
+          }, 100); // Short delay for better UI experience
+        }
+      });
     }
 
-    return () => unsubscribe()
-  }, [selectedConversation, getMessages])
+    return () => {
+      if (readStatusUpdateTimeout) {
+        clearTimeout(readStatusUpdateTimeout);
+      }
+      unsubscribe();
+    }
+  }, [selectedConversation, getMessages, user, markAllConversationMessagesAsRead])
 
   useEffect(() => {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+  
+  // When messages are loaded, if any unread messages are detected and the conversation is selected,
+  // mark them as read automatically in real-time
+  useEffect(() => {
+    if (!selectedConversation || !user || messages.length === 0) return;
+    
+    // Check for unread messages from the other user
+    const hasUnreadMessages = messages.some(
+      msg => msg.senderId !== user.uid && msg.read === false
+    );
+    
+    // If there are unread messages from the other user, mark them as read
+    if (hasUnreadMessages) {
+      const timeout = setTimeout(async () => {
+        try {
+          await markAllConversationMessagesAsRead(selectedConversation.id);
+          
+          // Update the local conversation state to reflect read status
+          updateConversationReadStatus(selectedConversation.id, true);
+          
+        } catch (error) {
+          console.error("Error automatically marking conversation messages as read:", error);
+        }
+      }, 300); // Small delay for better UX
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [messages, selectedConversation, user, markAllConversationMessagesAsRead]);
+
+  useEffect(() => {
+    // Mark messages as read when a conversation is selected
+    const markMessagesAsReadOnSelection = async () => {
+      if (!selectedConversation || !user) return;
+      
+      // Only mark as read if there are unread messages from the other person
+      if (selectedConversation.lastMessageSenderId !== user.uid && 
+          selectedConversation.lastMessageRead === false) {
+        try {
+          // Mark messages as read
+          await markAllConversationMessagesAsRead(selectedConversation.id);
+          
+          // Update the conversation in state to reflect read status
+          updateConversationReadStatus(selectedConversation.id, true);
+        } catch (error) {
+          console.error("Error marking messages as read:", error);
+        }
+      }
+    };
+    
+    markMessagesAsReadOnSelection();
+  }, [selectedConversation, user, markAllConversationMessagesAsRead]);
   
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -255,6 +345,33 @@ export default function Messages() {
       return "";
     }
   }
+  // Helper function to update conversation read status in local state
+  const updateConversationReadStatus = (conversationId: string, isRead: boolean) => {
+    // Create a consistent update function to avoid duplication
+    const updateConvo = (conversation: any) => {
+      if (conversation.id === conversationId) {
+        return {
+          ...conversation,
+          lastMessageRead: isRead,
+          // Add a local timestamp to ensure UI updates immediately
+          _lastUpdated: Date.now()
+        };
+      }
+      return conversation;
+    };
+    
+    // Update selected conversation if it's the one being marked as read
+    if (selectedConversation && selectedConversation.id === conversationId) {
+      setSelectedConversation((prev: any) => updateConvo(prev));
+    }
+    
+    // Update all conversations list
+    setConversations((prev: any[]) => prev.map(updateConvo));
+    
+    // Also update filtered conversations
+    setFilteredConversations((prev: any[]) => prev.map(updateConvo));
+  };
+
   // Show loading state if conversations are being loaded
   if (loading) {
     return (
@@ -330,18 +447,45 @@ export default function Messages() {
               </div>
             ) : (
               <div className="divide-y divide-kaaj-100">
-                {filteredConversations.map((conversation) => (                  
-                  <div
+                {filteredConversations.map((conversation) => (                    <div
                     key={conversation.id}
                     className={cn(
-                      "flex items-center gap-3 p-3 cursor-pointer transition-colors",
+                      "flex items-center gap-3 p-3 cursor-pointer transition-colors relative",
                       selectedConversation?.id === conversation.id 
                         ? "bg-kaaj-100/60 hover:bg-kaaj-100" 
-                        : "hover:bg-kaaj-50"
-                    )}
-                    onClick={() => {
+                        : "hover:bg-kaaj-50",
+                      conversation.lastMessageSenderId !== user?.uid && 
+                      conversation.lastMessageRead === false && 
+                      "border-l-4 border-red-500"
+                    )}                    onClick={async () => {
                       const updatedConversation = ensureParticipantNames(conversation);
-                      setSelectedConversation(updatedConversation);
+                      
+                      // Immediately update UI before server call for better UX
+                      // If the conversation has unread messages, mark it as read in state first
+                      if (conversation.lastMessageSenderId !== user?.uid && 
+                          conversation.lastMessageRead === false) {
+                        // Update local state first for immediate feedback
+                        updateConversationReadStatus(conversation.id, true);
+                      }
+                      
+                      // Set as selected conversation
+                      setSelectedConversation({
+                        ...updatedConversation,
+                        lastMessageRead: true // Ensure it appears as read in the UI
+                      });
+                      
+                      // Then, perform the server update
+                      if (conversation.lastMessageSenderId !== user?.uid && 
+                          conversation.lastMessageRead === false) {
+                        try {
+                          // Mark messages as read in this conversation
+                          await markAllConversationMessagesAsRead(conversation.id);
+                        } catch (error) {
+                          console.error("Error marking conversation as read:", error);
+                          // If the server update fails, revert the UI
+                          updateConversationReadStatus(conversation.id, false);
+                        }
+                      }
                     }}
                   >                    
                     <Avatar className="h-10 w-10 border border-kaaj-100">
@@ -351,15 +495,36 @@ export default function Messages() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">                        
-                        <p className="font-medium truncate text-kaaj-800">{getOtherParticipantName(conversation)}</p>                        <span className="text-xs text-kaaj-500 whitespace-nowrap">
+                        <p className={cn(
+                          "font-medium truncate",
+                          conversation.lastMessageSenderId !== user?.uid && 
+                          conversation.lastMessageRead === false
+                            ? "text-kaaj-900 font-bold" 
+                            : "text-kaaj-800"
+                        )}>
+                          {getOtherParticipantName(conversation)}
+                        </p>                        
+                        <span className="text-xs text-kaaj-500 whitespace-nowrap">
                           {conversation.lastMessageTimeDate ? formatTime(conversation.lastMessageTimeDate) : ""}
                         </span>
                       </div>
-                      <p className="text-sm text-kaaj-600 truncate">
+                      <p className={cn(
+                        "text-sm truncate",
+                        conversation.lastMessageSenderId !== user?.uid && 
+                        conversation.lastMessageRead === false
+                          ? "text-kaaj-900 font-medium" 
+                          : "text-kaaj-600"
+                      )}>
                         {conversation.lastMessage || "No messages yet"}
                       </p>
                       {conversation.jobTitle && (
                         <p className="text-xs text-kaaj-500 truncate">Re: {conversation.jobTitle}</p>
+                      )}
+                      
+                      {/* New message indicator */}
+                      {conversation.lastMessageSenderId !== user?.uid && 
+                       conversation.lastMessageRead === false && (
+                        <div className="absolute right-3 top-3 w-3 h-3 bg-red-500 rounded-full"></div>
                       )}
                     </div>
                   </div>
@@ -396,26 +561,60 @@ export default function Messages() {
                     <p className="text-xs text-kaaj-500 mt-1">Send a message to start the conversation</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {messages.map((message) => (                      
-                      <div
-                        key={message.id}
-                        className={cn(
-                          "chat-bubble px-4 py-3 rounded-lg max-w-[80%]",
-                          message.senderId === user?.uid 
-                            ? "sent bg-kaaj-500 text-white ml-auto" 
-                            : "received bg-kaaj-100 text-kaaj-800"
-                        )}
-                      >
-                        <div>{message.content}</div>                        <div className={cn(
-                          "chat-time text-xs mt-1",
-                          message.senderId === user?.uid 
-                            ? "text-kaaj-800" 
-                            : "text-kaaj-600"
-                        )}>
-                          {formatTime(message.timestamp)}</div>
-                      </div>
-                    ))}
+                  <div className="space-y-4">                    {messages.map((message, index) => {
+                      const isSender = message.senderId === user?.uid;
+                      const showReadStatus = isSender && typeof message.read !== 'undefined';
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            "relative group"
+                          )}
+                        >
+                          <div className={cn(
+                            "chat-bubble px-4 py-3 rounded-lg max-w-[80%] border shadow-sm",
+                            isSender 
+                              ? "sent bg-kaaj-500 text-white ml-auto border-kaaj-600" 
+                              : "received bg-kaaj-100 text-kaaj-800 border-kaaj-200"
+                          )}>
+                            <div>{message.content}</div>
+                            <div className="flex justify-between items-center mt-1">
+                              <div className={cn(
+                                "chat-time text-xs",
+                                isSender ? "text-white/70" : "text-kaaj-600"
+                              )}>
+                                {formatTime(message.timestamp)}
+                              </div>
+                              
+                              {/* Read status indicator */}
+                              {showReadStatus && (
+                                <div className="flex items-center gap-1 ml-2">
+                                  <span className={cn(
+                                    "text-[10px] flex items-center",
+                                    message.read ? "text-green-300" : "text-white/50"
+                                  )}>
+                                    {message.read ? (
+                                      <>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M20 6L9 17l-5-5" />
+                                        </svg>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M5 12h14" />
+                                        </svg>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div ref={messagesEndRef} />
                   </div>
                 )}
