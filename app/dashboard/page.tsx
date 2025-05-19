@@ -46,8 +46,18 @@ export default function Dashboard() {
     ratings: 0,
     views: 0
   })
-  
-  const [recentActivity, setRecentActivity] = useState<any[]>([])
+    // Define a type for activity items
+  interface ActivityItem {
+    type: string;
+    title: string;
+    description: string;
+    time: any; // Using any for timestamp as it could be in different formats
+    status?: string;
+    icon: any; // For Lucide icons
+    link: string;
+  }
+
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
 
@@ -74,18 +84,21 @@ export default function Dashboard() {
             status: job.status,
             icon: Briefcase,
             link: `/dashboard/jobs/${job.id}`
-          }))
-
-          // Only include message activity if there are actual conversations
+          }))          // Only include message activity if there are actual conversations
           const messageActivity = conversations.length > 0 
-            ? conversations.slice(0, 2).map((convo) => ({
-                type: "message",
-                title: convo.otherUserName || "Candidate",
-                description: `New message from ${convo.otherUserName || "a candidate"}`,
-                time: convo.lastMessageTime,
-                icon: MessageSquare,
-                link: `/dashboard/messages/${convo.id}`
-              }))
+            ? conversations.slice(0, 2).map((convo) => {
+                // Get other participant ID for the message link
+                const otherParticipantId = convo.participants.find(id => id !== user?.uid) || ''
+                return {
+                  type: "message",
+                  title: convo.otherUserName || "Candidate",
+                  description: `New message from ${convo.otherUserName || "a candidate"}`,
+                  time: convo.lastMessageTime,
+                  icon: MessageSquare,
+                  // Direct to main messages page with recipient param
+                  link: `/dashboard/messages?recipient=${otherParticipantId}`
+                }
+              })
             : []
 
           setRecentActivity([...jobActivity, ...messageActivity].sort((a, b) => {
@@ -111,19 +124,23 @@ export default function Dashboard() {
             time: app.createdAt,
             status: app.status,
             icon: Briefcase,
-            link: `/dashboard/applications/${app.id}`
-          }))
-
-          // Only include message activity if there are actual conversations
+            // Direct link to the job instead of applications/id
+            link: `/dashboard/jobs/${app.jobId}`
+          }))// Only include message activity if there are actual conversations
           const messageActivity = conversations.length > 0
-            ? conversations.slice(0, 2).map((convo) => ({
-                type: "message",
-                title: convo.otherUserName || "Recruiter",
-                description: `New message from ${convo.otherUserName || "a recruiter"}`,
-                time: convo.lastMessageTime,
-                icon: MessageSquare,
-                link: `/dashboard/messages/${convo.id}`
-              }))
+            ? conversations.slice(0, 2).map((convo) => {
+                // Get other participant ID for the message link
+                const otherParticipantId = convo.participants.find(id => id !== user?.uid) || ''
+                return {
+                  type: "message",
+                  title: convo.otherUserName || "Recruiter",
+                  description: `New message from ${convo.otherUserName || "a recruiter"}`,
+                  time: convo.lastMessageTime,
+                  icon: MessageSquare,
+                  // Direct to main messages page with recipient param
+                  link: `/dashboard/messages?recipient=${otherParticipantId}`
+                }
+              })
             : []
 
           setRecentActivity([...applicationActivity, ...messageActivity].sort((a, b) => {
@@ -141,8 +158,7 @@ export default function Dashboard() {
       fetchData()
     }
   }, [user, userRole, getUserJobs, getAllJobs, getUserApplications, getConversations, userProfile])
-
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status: string | undefined) => {
     switch (status?.toLowerCase()) {
       case "open":
         return (
@@ -184,8 +200,7 @@ export default function Dashboard() {
         return null
     }
   }
-
-  const formatDate = (timestamp) => {
+  const formatDate = (timestamp: Date | string | number | undefined) => {
     if (!timestamp) return "Recent"
     
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp)
@@ -209,8 +224,7 @@ export default function Dashboard() {
       return date.toLocaleDateString()
     }
   }
-
-  const ActivityItem = ({ activity }) => (
+  const ActivityItem = ({ activity }: { activity: ActivityItem }) => (
     <Link 
       href={activity.link || "#"} 
       className="flex items-center gap-4 rounded-lg border border-kaaj-100 p-3 hover:border-kaaj-300 transition-all hover:shadow-sm group"

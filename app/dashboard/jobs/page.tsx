@@ -40,46 +40,51 @@ export default function JobsPage() {
   
   // Log the status parameter for debugging
   console.log("Jobs page loaded with status param:", statusParam);
-  
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(statusParam === "open" ? "open" : statusParam === "closed" ? "closed" : "all")
   const { t } = useLanguage()
+    // Update active tab when URL parameter changes
   useEffect(() => {
+    const tab = statusParam === "open" ? "open" : statusParam === "closed" ? "closed" : "all";
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [statusParam, activeTab]);
+  
+  // Separate effect for fetching jobs based on active tab
+  useEffect(() => {
+    let isMounted = true;
+    
     async function fetchJobs() {
-      if (!user) return
+      if (!user || !isMounted) return
 
       try {
         setLoading(true)
 
-        // Determine the status filter based on URL parameter
-        let statusFilter;
-        if (statusParam === "open") {
-          statusFilter = "open";
-          setActiveTab("open");
-        } else if (statusParam === "closed") {
-          statusFilter = "closed";
-          setActiveTab("closed");
-        } else {
-          statusFilter = "all";
-          setActiveTab("all");
-        }
+        // Use activeTab for filtering
+        const statusFilter = activeTab === "all" ? "all" : activeTab;
         
         console.log("Fetching jobs with status filter:", statusFilter);
         
-        const filters = {
+        // Define filters with proper TypeScript interface
+        const filters: { 
+          status: string; 
+          recruiterId?: string;
+        } = {
           status: statusFilter
         }
         
+        // For recruiters, modify the filters to include the recruiterId
+        if (userRole === "recruiter") {
+          filters.recruiterId = user.uid;
+        }
+        
+        console.log("Fetching with filters:", filters);
         const jobsData = await getAllJobs(filters) as Job[]
-          // For recruiters, only show jobs they've posted
-        // Make sure we're filtering properly based on the status and user role
-        const filteredJobs = userRole === "recruiter" ? 
-          jobsData.filter(job => job.recruiterId === user.uid) : 
-          jobsData
         
         // Get application counts for each job
-        const jobsWithCounts = await Promise.all(filteredJobs.map(async (job) => {
+        const jobsWithCounts = await Promise.all(jobsData.map(async (job) => {
           try {
             const applications = await getApplications(job.id)
             return {
@@ -93,8 +98,7 @@ export default function JobsPage() {
             }
           }
         }));
-        
-        console.log(`Retrieved ${filteredJobs.length} filtered jobs for ${userRole}`, filteredJobs);
+          console.log(`Retrieved ${jobsData.length} jobs for ${userRole}`, jobsData);
         console.log(`Jobs with counts: ${jobsWithCounts.length}`, jobsWithCounts);
         setJobs(jobsWithCounts)
       } catch (error) {
@@ -107,18 +111,23 @@ export default function JobsPage() {
       } finally {
         setLoading(false)
       }
+    }    fetchJobs()
+    
+    return () => {
+      isMounted = false;
     }
-
-    fetchJobs()
-  }, [user, userRole, getAllJobs, getApplications, toast, statusParam])  
-  const handleTabChange = (value: string) => {
+  }, [user, userRole, getAllJobs, getApplications, activeTab]);  const handleTabChange = (value: string) => {
+    // Don't do anything if we're already on this tab
+    if (value === activeTab) return;
+    
+    // Update the active tab state
     setActiveTab(value);
     
-    // Update the URL to reflect the current tab and reload the page for consistent state
+    // Update the URL without causing a full page reload
     if (value === "all") {
-      router.push('/dashboard/jobs');
+      router.replace('/dashboard/jobs', { scroll: false });
     } else {
-      router.push(`/dashboard/jobs?status=${value}`);
+      router.replace(`/dashboard/jobs?status=${value}`, { scroll: false });
     }
   };
   
@@ -127,11 +136,10 @@ export default function JobsPage() {
       <RetroBox className="max-w-4xl mx-auto my-8">
         <div className="text-center py-8">{t("pleaseSignIn")}</div>
       </RetroBox>
-    )
-  }
-  // Use filteredJobs directly from the API response
-  // This ensures we're showing jobs based on the server filter, not client filter
-  const filteredJobs = jobs
+    )  }
+  
+  // No need for additional client-side filtering since we're already fetching filtered data
+  const filteredJobs = jobs;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -148,16 +156,20 @@ export default function JobsPage() {
       </div>
 
       <RetroBox>
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4 border-2 border-black rounded-md overflow-hidden">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">          <TabsList className="grid w-full grid-cols-3 mb-4 border-2 border-black rounded-md overflow-hidden">
             <TabsTrigger value="all" className="data-[state=active]:bg-yellow-300 data-[state=active]:shadow-none">
-              {t("allJobs")} ({jobs.length})
+              {t("allJobs")} 
+              {!loading && `(${activeTab === "all" ? jobs.length : jobs.length})`}
             </TabsTrigger>
             <TabsTrigger value="open" className="data-[state=active]:bg-yellow-300 data-[state=active]:shadow-none">
-              {t("openJobs")} ({jobs.filter((job) => job.status === "open").length})
+              {t("openJobs")}
+              {!loading && 
+                `(${activeTab === "open" ? jobs.length : jobs.filter(job => job.status === "open").length})`}
             </TabsTrigger>
             <TabsTrigger value="closed" className="data-[state=active]:bg-yellow-300 data-[state=active]:shadow-none">
-              {t("closedJobs")} ({jobs.filter((job) => job.status === "closed").length})
+              {t("closedJobs")}
+              {!loading && 
+                `(${activeTab === "closed" ? jobs.length : jobs.filter(job => job.status === "closed").length})`}
             </TabsTrigger>
           </TabsList>
 

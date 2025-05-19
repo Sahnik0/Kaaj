@@ -314,11 +314,10 @@ export default function JobDetailsPage() {
                     {job.status === "closed" ? "This job is no longer accepting applications" : ""}
                   </Badge>
                 )}
-                
-                <Button 
+                  <Button 
                   variant="outline"
                   className="border-kaaj-200 w-full"
-                  onClick={() => router.push("/dashboard/jobs")}
+                  onClick={() => router.push(userRole === "candidate" ? "/dashboard/find-jobs" : "/dashboard/jobs")}
                 >
                   View All Jobs
                 </Button>

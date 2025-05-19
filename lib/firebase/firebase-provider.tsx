@@ -113,15 +113,17 @@ interface FirebaseContextType {
   getUserJobs: () => Promise<any[]>
   getAllJobs: (filters?: any) => Promise<any[]>
   getJob: (jobId: string) => Promise<any>
+  getJobById: (jobId: string) => Promise<any> // Alias for getJob
   updateJob: (jobId: string, data: any) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
-  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>
-  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
+  applyToJob: (jobId: string, jobTitle?: string) => Promise<string>,  checkUserAppliedToJob: (jobId: string) => Promise<boolean>
   getApplications: (jobId: string) => Promise<any[]>
   getUserApplications: () => Promise<any[]>
+  getApplicationById: (applicationId: string) => Promise<any>
   updateApplicationStatus: (applicationId: string, status: string) => Promise<void>
   getConversations: () => Promise<any[]>
-  getMessages: (conversationId: string, callback: (messages: any[]) => void) => () => void
+  getConversationById: (conversationId: string) => Promise<any>
+  getMessages: (conversationId: string, callback?: (messages: any[]) => void) => any
   sendMessage: (recipientId: string, content: string, jobId?: string, jobTitle?: string) => Promise<void>
   getLearningResources: () => Promise<any[]>
   addLearningResource: (resourceData: any) => Promise<string>
@@ -277,20 +279,25 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }))
-    } catch (error) {
+      }))    } catch (error) {
       console.error("Error getting user jobs:", error)
       return [] // Return empty array instead of throwing
     }
   }
-    const getAllJobs = async (filters?: any) => {
+  
+  const getAllJobs = async (filters?: {
+    status?: string;
+    recruiterId?: string;
+    category?: string;
+    locationType?: string;
+    jobType?: string;
+  }) => {
     try {
       console.log("getAllJobs called with filters:", filters);
       
       // Start with a base query for all jobs
       let q = query(collection(db, "jobs"));
-      
-      if (filters) {
+        if (filters) {
         console.log("Status filter:", filters.status);
         
         // Apply explicit status filter if provided
@@ -302,10 +309,9 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           q = query(q, where("status", "==", "closed"));
         } else {
           console.log("No status filtering, showing all jobs");
-          // No status filter applied - show all jobs
+          // No status filter applied (all) - show all jobs regardless of status
         }
-        
-        // Apply other filters
+          // Apply other filters
         if (filters.category && filters.category !== "All Categories") {
           q = query(q, where("category", "==", filters.category))
         }
@@ -314,6 +320,10 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         }
         if (filters.jobType && filters.jobType !== "all") {
           q = query(q, where("jobType", "==", filters.jobType))
+        }
+        // If recruiterId is provided (e.g., when a recruiter views their jobs)
+        if (filters.recruiterId) {
+          q = query(q, where("recruiterId", "==", filters.recruiterId))
         }
       } else {
         // When no filters provided, for candidates show only open jobs, for others show all
@@ -1289,7 +1299,53 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   };
-
+  // Get application by ID
+  const getApplicationById = async (applicationId: string) => {
+    if (!user) return null;
+    
+    try {
+      const applicationRef = doc(db, "applications", applicationId);
+      const applicationDoc = await getDoc(applicationRef);
+      
+      if (!applicationDoc.exists()) {
+        return null;
+      }
+      
+      return {
+        id: applicationDoc.id,
+        ...applicationDoc.data()
+      };
+    } catch (error) {
+      console.error("Error getting application:", error);
+      return null;
+    }
+  };
+  
+  // Get conversation by ID
+  const getConversationById = async (conversationId: string) => {
+    if (!user) return null;
+    
+    try {
+      const conversationRef = doc(db, "conversations", conversationId);
+      const conversationDoc = await getDoc(conversationRef);
+      
+      if (!conversationDoc.exists()) {
+        return null;
+      }
+      
+      return {
+        id: conversationDoc.id,
+        ...conversationDoc.data()
+      };
+    } catch (error) {
+      console.error("Error getting conversation:", error);
+      return null;
+    }
+  };
+  
+  // Alias for getJob for consistent naming
+  const getJobById = getJob;
+  
   const value = {
     user,
     userRole,
@@ -1305,14 +1361,16 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     getUserJobs,
     getAllJobs,
     getJob,
+    getJobById,
     updateJob,
     deleteJob,
-    applyToJob,
-    checkUserAppliedToJob,
+    applyToJob,    checkUserAppliedToJob,
     getApplications,
     getUserApplications,
+    getApplicationById,
     updateApplicationStatus,
     getConversations,
+    getConversationById,
     getMessages,
     sendMessage,
     getLearningResources,
