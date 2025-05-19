@@ -582,7 +582,7 @@ export function DashboardSidebar() {
                     </TooltipTrigger>
                     {collapsed && (
                       <TooltipContent side="right" className="z-50">
-                        <span>{t("signOut")}</span>
+                        <span>{t("Sign Out")}</span>
                       </TooltipContent>
                     )}
                   </Tooltip>
