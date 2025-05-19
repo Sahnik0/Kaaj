@@ -1,5 +1,5 @@
 import { db } from "./firebase-config"
-import { collection, query, where, getDocs, Timestamp, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp, addDoc, doc, updateDoc } from "firebase/firestore"
 
 export type Notification = {
   id: string
@@ -51,6 +51,29 @@ export async function createNotification(notification: Omit<Notification, "id" |
 }
 
 export async function markNotificationAsRead(notificationId: string) {
-  // Implementation for marking a notification as read
-  // This would be implemented when needed
+  try {
+    const notificationRef = doc(db, "notifications", notificationId);
+    await updateDoc(notificationRef, {
+      read: true,
+      readAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    throw error;
+  }
+}
+
+export async function markNotificationAsUnread(notificationId: string) {
+  try {
+    const notificationRef = doc(db, "notifications", notificationId);
+    await updateDoc(notificationRef, {
+      read: false,
+      readAt: null,
+    });
+    return true;
+  } catch (error) {
+    console.error("Error marking notification as unread:", error);
+    throw error;
+  }
 }

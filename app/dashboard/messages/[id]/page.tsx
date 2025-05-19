@@ -12,6 +12,7 @@ import { useLanguage } from "@/lib/i18n/language-context"
 import { useRetroToast } from "@/hooks/use-retro-toast"
 import { formatDistance } from "date-fns"
 import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface ConversationProps {
   params: {
@@ -21,7 +22,7 @@ interface ConversationProps {
 
 export default function ConversationPage({ params }: ConversationProps) {
   const { id } = params
-  const { user, getConversationById, getMessages, sendMessage } = useFirebase()
+  const { user, getConversationById, getMessages, sendMessage, markAllConversationMessagesAsRead, markConversationMessageAsRead, markConversationMessageAsUnread } = useFirebase()
   const [conversation, setConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [otherUser, setOtherUser] = useState<any>(null)
@@ -109,7 +110,19 @@ export default function ConversationPage({ params }: ConversationProps) {
         router.push("/dashboard/messages")
       }
     }
-  }, [conversation, user, loading, router, toast])
+  }, [conversation, user, loading, router, toast])  // Mark messages as read when the user opens the conversation - only once when conversation data is loaded
+  useEffect(() => {
+    if (user && id && conversation) {
+      // Only call mark as read if there are unread messages (lastMessageRead is false)
+      if (conversation.lastMessageSenderId !== user.uid && conversation.lastMessageRead === false) {
+        markAllConversationMessagesAsRead(id)
+          .catch(error => {
+            console.error("Error marking messages as read:", error);
+          });
+      }
+    }
+  }, [user, id, conversation, markAllConversationMessagesAsRead]);
+  
   // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -184,8 +197,7 @@ export default function ConversationPage({ params }: ConversationProps) {
         </div>
 
         {/* Messages area */}
-        <div className="flex flex-col p-4 space-y-4 overflow-y-auto h-[calc(100%-8rem)]">
-          {messages.length === 0 ? (
+        <div className="flex flex-col p-4 space-y-4 overflow-y-auto h-[calc(100%-8rem)]">          {messages.length === 0 ? (
             <div className="text-center text-gray-500 mt-8">
               {t("noMessages")}
             </div>
@@ -196,19 +208,98 @@ export default function ConversationPage({ params }: ConversationProps) {
                 ? message.timestamp.toDate() 
                 : new Date(message.timestamp)
               
-              return (                <div 
+              return (                
+                <div 
                   key={message.id} 
                   className={cn(
-                    "max-w-[70%] p-3 rounded-lg",
-                    isSender ? "ml-auto bg-yellow-300 border-2 border-black" : "bg-white border-2 border-black"
+                    "max-w-[70%] p-3 rounded-lg relative group",
+                    isSender 
+                      ? "ml-auto bg-yellow-300 border-2 border-black" 
+                      : "bg-white border-2 border-black"
                   )}
-                >                  <p>{message.content || message.text}</p>
-                  <p className={cn(
-                    "text-xs mt-1",
-                    isSender ? "text-gray-700" : "text-gray-500"
-                  )}>
-                    {formatDistance(messageDate, new Date(), { addSuffix: true })}
-                  </p>
+                >                  
+                  <p>{message.content || message.text}</p>
+                  <div className="flex justify-between items-center mt-1">
+                    <p className={cn(
+                      "text-xs",
+                      isSender ? "text-gray-700" : "text-gray-500"
+                    )}>
+                      {formatDistance(messageDate, new Date(), { addSuffix: true })}
+                    </p>                    {/* Read/unread status for messages I sent */}
+                    {isSender && (
+                      <div className="flex items-center gap-1">
+                        <motion.span 
+                          key={`status-${message.id}-${message.read ? 'read' : 'sent'}`}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className={cn(
+                            "text-xs flex items-center gap-1",
+                            message.read ? "text-green-600" : "text-gray-500"
+                          )}
+                        >
+                          {message.read ? (
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                              <span>Read</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 12h14" />
+                              </svg>
+                              <span>Sent</span>
+                            </>
+                          )}
+                        </motion.span>
+                      </div>
+                    )}                    {/* Action to toggle read/unread for messages I received */}
+                    {!isSender && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={`toggle-${message.id}-${message.read ? 'read' : 'unread'}`}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="p-1 h-auto text-xs text-gray-500 hover:text-black hover:bg-yellow-100 rounded-full flex items-center gap-1"
+                              onClick={() => {
+                                if (message.read) {
+                                  markConversationMessageAsUnread(id, message.id);
+                                } else {
+                                  markConversationMessageAsRead(id, message.id);
+                                }
+                              }}
+                            >
+                              {message.read ? (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                  </svg>
+                                  <span>Mark as unread</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                    <path d="m9 11 3 3L22 4" />
+                                  </svg>
+                                  <span>Mark as read</span>
+                                </>
+                              )}
+                            </Button>
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })

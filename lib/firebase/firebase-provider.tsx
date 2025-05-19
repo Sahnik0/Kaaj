@@ -140,8 +140,13 @@ interface FirebaseContextType {
   getUserStats: () => Promise<any>
   updateUserStatus: (userId: string, status: string, reason: string) => Promise<void>
   uploadProfileImage: (file: File) => Promise<string>
-  getNotifications: () => Promise<any[]>
+  getNotifications: () => Promise<any[]>  
+  getUnreadNotificationsCount: () => Promise<number>
   markNotificationAsRead: (notificationId: string) => Promise<void>
+  markNotificationAsUnread: (notificationId: string) => Promise<void>
+  markAllConversationMessagesAsRead: (conversationId: string) => Promise<void>
+  markConversationMessageAsRead: (conversationId: string, messageId: string) => Promise<void>
+  markConversationMessageAsUnread: (conversationId: string, messageId: string) => Promise<void>
 }
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined)
@@ -799,8 +804,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       // Create or get conversation
       const conversationId = await createConversation(recipientId, jobId, jobTitle)      // Only save message if it has actual content (not just whitespace)
       const trimmedContent = content.trim();
-      
-      if (trimmedContent) {
+        if (trimmedContent) {
         // Add message to conversation
         await addDoc(collection(db, "conversations", conversationId, "messages"), {
           senderId: user.uid,
@@ -808,12 +812,15 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           recipientId,
           content: trimmedContent,
           timestamp: serverTimestamp(),
+          read: false
         })
   
         // Update conversation with last message
         await updateDoc(doc(db, "conversations", conversationId), {
           lastMessage: trimmedContent,
           lastMessageTime: serverTimestamp(),
+          lastMessageSenderId: user.uid,
+          lastMessageRead: false,
         })
       }
 
@@ -1278,6 +1285,25 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const getUnreadNotificationsCount = async () => {
+    if (!user) return 0
+
+    try {
+      // Query for unread notifications
+      const q = query(
+        collection(db, "notifications"), 
+        where("userId", "==", user.uid),
+        where("read", "==", false)
+      )
+
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.length
+    } catch (error) {
+      console.error("Error getting unread notifications count:", error)
+      return 0
+    }
+  }
+
   const markNotificationAsRead = async (notificationId: string) => {
     if (!user) throw new Error("User not authenticated")
 
@@ -1291,6 +1317,107 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }
+  
+  const markNotificationAsUnread = async (notificationId: string) => {
+    if (!user) throw new Error("User not authenticated")
+    
+    try {
+      await updateDoc(doc(db, "notifications", notificationId), {
+        read: false,
+        readAt: null,
+      })
+    } catch (error) {
+      console.error("Error marking notification as unread:", error)
+      throw error
+    }
+  }
+
+  const markAllConversationMessagesAsRead = async (conversationId: string) => {
+    if (!user) throw new Error("User not authenticated")
+
+    try {
+      // First, update the conversation's lastMessageRead status
+      const conversationRef = doc(db, "conversations", conversationId);
+      await updateDoc(conversationRef, {
+        lastMessageRead: true
+      });
+      
+      // Get all unread messages where the current user is the recipient
+      const q = query(
+        collection(db, "conversations", conversationId, "messages"),
+        where("recipientId", "==", user.uid),
+        where("read", "==", false)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      // Update each message to mark it as read
+      const updatePromises = querySnapshot.docs.map(doc => 
+        updateDoc(doc.ref, {
+          read: true,
+          readAt: serverTimestamp()
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      
+    } catch (error) {
+      console.error("Error marking all messages as read:", error);
+      throw error;
+    }
+  }
+  
+  const markConversationMessageAsRead = async (conversationId: string, messageId: string) => {
+    if (!user) throw new Error("User not authenticated")
+
+    try {
+      const messageRef = doc(db, "conversations", conversationId, "messages", messageId);
+      await updateDoc(messageRef, {
+        read: true,
+        readAt: serverTimestamp()
+      });
+      
+      // Check if this was the last unread message
+      const unreadQuery = query(
+        collection(db, "conversations", conversationId, "messages"),
+        where("recipientId", "==", user.uid),
+        where("read", "==", false)
+      );
+      
+      const unreadSnapshot = await getDocs(unreadQuery);
+      
+      // If there are no more unread messages, update the conversation
+      if (unreadSnapshot.empty) {
+        await updateDoc(doc(db, "conversations", conversationId), {
+          lastMessageRead: true
+        });
+      }
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+      throw error;
+    }
+  }
+  
+  const markConversationMessageAsUnread = async (conversationId: string, messageId: string) => {
+    if (!user) throw new Error("User not authenticated")
+
+    try {
+      const messageRef = doc(db, "conversations", conversationId, "messages", messageId);
+      await updateDoc(messageRef, {
+        read: false,
+        readAt: null
+      });
+      
+      // Update the conversation to show unread messages
+      await updateDoc(doc(db, "conversations", conversationId), {
+        lastMessageRead: false
+      });
+    } catch (error) {
+      console.error("Error marking message as unread:", error);
+      throw error;
+    }
+  }
+  
   // Function to check if the current user has already applied to a specific job
   const checkUserAppliedToJob = async (jobId: string) => {
     if (!user) return false;
@@ -1396,10 +1523,14 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     submitReport,
     getJobStats,
     getUserStats,
-    updateUserStatus,
-    uploadProfileImage,
+    updateUserStatus,    uploadProfileImage,
     getNotifications,
+    getUnreadNotificationsCount,
     markNotificationAsRead,
+    markNotificationAsUnread,
+    markAllConversationMessagesAsRead,
+    markConversationMessageAsRead,
+    markConversationMessageAsUnread,
   }
 
   return <FirebaseContext.Provider value={value}>{children}</FirebaseContext.Provider>

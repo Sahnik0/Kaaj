@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useFirebase } from "@/lib/firebase/firebase-provider"
-import { type Notification, getNotifications } from "@/lib/firebase/notifications"
+import { type Notification, getNotifications, markNotificationAsRead, markNotificationAsUnread } from "@/lib/firebase/notifications"
 import { formatDistanceToNow } from "date-fns"
-import { Bell, X, Search, Filter, Loader2, Calendar } from "lucide-react"
+import { Bell, X, Search, Filter, Loader2, Calendar, CheckCircle, Circle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +22,46 @@ export default function NotificationsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [filterStatus, setFilterStatus] = useState<string>("all") // "all", "read", "unread"
   const [filteredNotifications, setFilteredNotifications] = useState<Notification[]>([])
+  const [actionLoading, setActionLoading] = useState<string>("")
   const { t } = useTranslation()
+  
+  // Function to toggle notification read status
+  const toggleNotificationStatus = async (notification: Notification) => {
+    if (actionLoading === notification.id) return; // Prevent multiple clicks
+    
+    setActionLoading(notification.id);
+    try {
+      if (notification.read) {
+        await markNotificationAsUnread(notification.id);
+      } else {
+        await markNotificationAsRead(notification.id);
+      }
+      
+      // Update the notification in the local state
+      const updatedNotifications = notifications.map(n => {
+        if (n.id === notification.id) {
+          return { ...n, read: !n.read };
+        }
+        return n;
+      });
+      
+      setNotifications(updatedNotifications);
+      
+      // Also update filtered notifications
+      const updatedFiltered = filteredNotifications.map(n => {
+        if (n.id === notification.id) {
+          return { ...n, read: !n.read };
+        }
+        return n;
+      });
+      
+      setFilteredNotifications(updatedFiltered);
+    } catch (error) {
+      console.error("Error toggling notification status:", error);
+    } finally {
+      setActionLoading("");
+    }
+  }
 
   useEffect(() => {
     async function fetchNotifications() {
@@ -185,8 +224,7 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredNotifications.map((notification) => (
-                <div
+              {filteredNotifications.map((notification) => (                <div
                   key={notification.id}
                   className={cn(
                     "border border-kaaj-100 p-4 rounded-lg transition-all hover:shadow-md",
@@ -196,9 +234,22 @@ export default function NotificationsPage() {
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        {!notification.read && (
-                          <Badge className="bg-kaaj-500 text-white h-2 w-2 p-0 rounded-full" />
-                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="p-0 h-6 w-6 rounded-full hover:bg-kaaj-100"
+                          onClick={() => toggleNotificationStatus(notification)}
+                          disabled={actionLoading === notification.id}
+                        >
+                          {notification.read ? (
+                            <Circle className="h-4 w-4 text-kaaj-400" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 text-kaaj-500" />
+                          )}
+                          <span className="sr-only">
+                            {notification.read ? "Mark as unread" : "Mark as read"}
+                          </span>
+                        </Button>
                         <p className="font-medium text-kaaj-800">{notification.message}</p>
                       </div>
                       <div className="flex items-center text-xs text-kaaj-500">
@@ -206,14 +257,37 @@ export default function NotificationsPage() {
                         {formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}
                       </div>
                     </div>
-                    {notification.link && (
-                      <Link
-                        href={notification.link}
-                        className="ml-4 px-3 py-1 bg-kaaj-100 border border-kaaj-200 rounded-md text-sm font-medium text-kaaj-700 hover:bg-kaaj-200 transition-all"
-                      >
-                        {t("view")}
-                      </Link>
-                    )}
+                    <div className="flex gap-2">
+                      {notification.read ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-xs border-kaaj-200 text-kaaj-600"
+                          onClick={() => toggleNotificationStatus(notification)}
+                          disabled={actionLoading === notification.id}
+                        >
+                          Mark as unread
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-xs border-kaaj-200 text-kaaj-600"
+                          onClick={() => toggleNotificationStatus(notification)}
+                          disabled={actionLoading === notification.id}
+                        >
+                          Mark as read
+                        </Button>
+                      )}
+                      {notification.link && (
+                        <Link
+                          href={notification.link}
+                          className="px-3 py-1 bg-kaaj-100 border border-kaaj-200 rounded-md text-sm font-medium text-kaaj-700 hover:bg-kaaj-200 transition-all"
+                        >
+                          {t("view")}
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
