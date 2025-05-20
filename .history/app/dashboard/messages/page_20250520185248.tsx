@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, User, Search, X, Loader2, Phone, Video, PhoneOff, VideoOff, Mic, MicOff, Monitor } from "lucide-react"
+import { Send, User, Search, X, Loader2, Phone, Video } from 'lucide-react'
+import { PageContainer, PageHeader } from "@/components/dashboard/page-container"
 import { cn } from "@/lib/utils"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useZegoCall, type CallType } from "@/lib/zego-service"
+import { IncomingCall } from "@/components/call/incoming-call"
+import { ConnectingCall } from "@/components/call/connecting-call"
+import { ActiveCall } from "@/components/call/active-call"
 
 export default function Messages() {
   const { user, getConversations, getMessages, sendMessage, createConversation, markAllConversationMessagesAsRead } =
@@ -28,14 +31,9 @@ export default function Messages() {
   const [processingRecipient, setProcessingRecipient] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const searchParams = useSearchParams()
-  const [callType, setCallType] = useState<"audio" | "video" | null>(null)
-  const [callActive, setCallActive] = useState(false)
-  const [callRecipient, setCallRecipient] = useState<any>(null)
-  const [micMuted, setMicMuted] = useState(false)
-  const [videoEnabled, setVideoEnabled] = useState(true)
-  const [screenSharing, setScreenSharing] = useState(false)
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+
+  // Initialize Zego for calls
+  const zegoCall = useZegoCall(user?.uid, user?.displayName || "User")
 
   // Handle recipient query parameter
   useEffect(() => {
@@ -306,6 +304,7 @@ export default function Messages() {
 
     return conversation.participantNames[otherParticipantId]
   }
+
   const formatTime = (timestamp: any) => {
     if (!timestamp) return ""
 
@@ -334,6 +333,7 @@ export default function Messages() {
       return ""
     }
   }
+
   // Helper function to update conversation read status in local state
   const updateConversationReadStatus = (conversationId: string, isRead: boolean) => {
     // Create a consistent update function to avoid duplication
@@ -361,114 +361,91 @@ export default function Messages() {
     setFilteredConversations((prev: any[]) => prev.map(updateConvo))
   }
 
-  const initiateCall = (type: "audio" | "video") => {
-    if (!selectedConversation) return
+  // Handle initiating a call
+  const handleInitiateCall = async (callType: CallType) => {
+    if (!selectedConversation || !user) return
 
-    const recipientId = selectedConversation.participants.find((id: string) => id !== user?.uid)
+    // Get the recipient ID (the other participant in the conversation)
+    const recipientId = selectedConversation.participants.find((id: string) => id !== user.uid)
+
     if (!recipientId) {
       console.error("Could not find recipient ID")
       return
     }
 
-    setCallType(type)
-    setCallRecipient({
-      id: recipientId,
-      name: getOtherParticipantName(selectedConversation),
-    })
-    setCallActive(true)
+    // Get recipient name
+    const recipientName = getOtherParticipantName(selectedConversation)
 
-    // In a real implementation, you would:
-    // 1. Initialize WebRTC connection
-    // 2. Get user media (camera/mic)
-    // 3. Signal the call to the recipient through your backend
-    // 4. Set up the connection when they accept
-
-    // For demo purposes, we're just showing the UI
-    if (type === "video" && localVideoRef.current) {
-      // In a real implementation, this would show the user's camera
-      // For demo, we'll just show a placeholder
-      navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream
-          }
-        })
-        .catch((err) => {
-          console.error("Error accessing media devices:", err)
-        })
+    // Initialize call with Zego
+    try {
+      await zegoCall.initializeCall(recipientId, recipientName, callType)
+    } catch (error) {
+      console.error("Error initiating call:", error)
+      alert(`Failed to start ${callType} call. Please try again.`)
     }
-  }
-
-  const endCall = () => {
-    // In a real implementation, you would:
-    // 1. Close the WebRTC connection
-    // 2. Signal to the other user that the call has ended
-    // 3. Clean up media streams
-
-    if (localVideoRef.current && localVideoRef.current.srcObject) {
-      const tracks = (localVideoRef.current.srcObject as MediaStream).getTracks()
-      tracks.forEach((track) => track.stop())
-    }
-
-    setCallActive(false)
-    setCallType(null)
-    setCallRecipient(null)
-    setMicMuted(false)
-    setVideoEnabled(true)
-    setScreenSharing(false)
-  }
-
-  const toggleMic = () => {
-    setMicMuted(!micMuted)
-
-    // In a real implementation, you would toggle the audio track
-    if (localVideoRef.current && localVideoRef.current.srcObject) {
-      const audioTracks = (localVideoRef.current.srcObject as MediaStream).getAudioTracks()
-      audioTracks.forEach((track) => {
-        track.enabled = micMuted // We're toggling to the opposite of current state
-      })
-    }
-  }
-
-  const toggleVideo = () => {
-    setVideoEnabled(!videoEnabled)
-
-    // In a real implementation, you would toggle the video track
-    if (localVideoRef.current && localVideoRef.current.srcObject) {
-      const videoTracks = (localVideoRef.current.srcObject as MediaStream).getVideoTracks()
-      videoTracks.forEach((track) => {
-        track.enabled = !videoEnabled // We're toggling to the opposite of current state
-      })
-    }
-  }
-
-  const toggleScreenSharing = () => {
-    // In a real implementation, you would:
-    // 1. Get display media if starting screen sharing
-    // 2. Replace the video track with the screen track
-    // 3. Or switch back to camera when stopping
-
-    setScreenSharing(!screenSharing)
   }
 
   // Show loading state if conversations are being loaded
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <PageContainer>
         <div className="flex h-[calc(100vh-200px)] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-kaaj-500" />
           <p className="ml-2 text-kaaj-600">Loading messages...</p>
         </div>
-      </div>
+      </PageContainer>
     )
   }
+
+  // Render call UI components based on call state
+  const renderCallUI = () => {
+    const { callState } = zegoCall
+
+    if (callState.isIncoming) {
+      return (
+        <IncomingCall
+          callerName={callState.participantName}
+          callType={callState.callType}
+          onAccept={zegoCall.acceptCall}
+          onReject={zegoCall.rejectCall}
+        />
+      )
+    }
+
+    if (callState.isConnecting) {
+      return (
+        <ConnectingCall
+          participantName={callState.participantName}
+          callType={callState.callType}
+          onCancel={zegoCall.endCall}
+        />
+      )
+    }
+
+    if (callState.isActive) {
+      return (
+        <ActiveCall
+          callState={zegoCall.callState}
+          isMuted={zegoCall.isMuted}
+          isVideoEnabled={zegoCall.isVideoEnabled}
+          onToggleMute={zegoCall.toggleMute}
+          onToggleVideo={zegoCall.toggleVideo}
+          onEndCall={zegoCall.endCall}
+          localStream={zegoCall.localStream}
+          remoteStream={zegoCall.remoteStream}
+        />
+      )
+    }
+
+    return null
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-kaaj-800">Messages</h1>
-        <p className="text-kaaj-600">Communicate securely with recruiters and candidates.</p>
-      </div>
+    <PageContainer>
+      <PageHeader title="Messages" description="Communicate securely with recruiters and candidates." />
+
+      {/* Render call UI components */}
+      {renderCallUI()}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-220px)]">
         {/* Conversations List */}
@@ -619,62 +596,45 @@ export default function Messages() {
           {selectedConversation ? (
             <>
               <CardHeader className="px-4 py-3 border-b border-kaaj-100 bg-gradient-to-br from-kaaj-50 to-kaaj-100/60">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8 border border-kaaj-100">
-                    <AvatarFallback className="bg-kaaj-100 text-kaaj-700">
-                      <User className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-lg text-kaaj-800">
-                      {getOtherParticipantName(selectedConversation)}
-                    </CardTitle>
-                    {selectedConversation.jobTitle && (
-                      <p className="text-xs text-kaaj-600">Job: {selectedConversation.jobTitle}</p>
-                    )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8 border border-kaaj-100">
+                      <AvatarFallback className="bg-kaaj-100 text-kaaj-700">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <CardTitle className="text-lg text-kaaj-800">
+                        {getOtherParticipantName(selectedConversation)}
+                      </CardTitle>
+                      {selectedConversation.jobTitle && (
+                        <p className="text-xs text-kaaj-600">Job: {selectedConversation.jobTitle}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Call buttons */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => handleInitiateCall("audio")}
+                      variant="outline"
+                      size="sm"
+                      className="bg-white hover:bg-kaaj-50 border-kaaj-200"
+                    >
+                      <Phone className="h-4 w-4 mr-1.5" />
+                      Call
+                    </Button>
+                    <Button
+                      onClick={() => handleInitiateCall("video")}
+                      variant="outline"
+                      size="sm"
+                      className="bg-white hover:bg-kaaj-50 border-kaaj-200"
+                    >
+                      <Video className="h-4 w-4 mr-1.5" />
+                      Video
+                    </Button>
                   </div>
                 </div>
-                {selectedConversation && (
-                  <div className="flex gap-2 mt-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => initiateCall("audio")}
-                            variant="outline"
-                            size="sm"
-                            className="bg-green-50 border-green-200 hover:bg-green-100 text-green-700"
-                          >
-                            <Phone className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">Audio Call</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Start audio call</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => initiateCall("video")}
-                            variant="outline"
-                            size="sm"
-                            className="bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700"
-                          >
-                            <Video className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">Video Call</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Start video call</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                )}
               </CardHeader>
               <CardContent className="flex-1 overflow-auto p-4 space-y-4">
                 {messages.length === 0 ? (
@@ -787,92 +747,6 @@ export default function Messages() {
           )}
         </Card>
       </div>
-      {/* Call Dialog */}
-      <Dialog open={callActive} onOpenChange={(open) => !open && endCall()}>
-        <DialogContent className="sm:max-w-[500px] md:max-w-[700px] lg:max-w-[900px]">
-          <DialogHeader>
-            <DialogTitle>
-              {callType === "audio" ? "Audio Call" : "Video Call"} with {callRecipient?.name}
-            </DialogTitle>
-            <DialogDescription>
-              {callType === "audio" ? "Audio call in progress" : "Video call in progress"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col items-center">
-            {callType === "video" && (
-              <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
-                {/* Main video (remote user or screen share) */}
-                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-
-                {/* Local video (picture-in-picture) */}
-                <div className="absolute bottom-4 right-4 w-1/4 aspect-video bg-gray-800 rounded overflow-hidden border-2 border-white shadow-lg">
-                  <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-
-                  {!videoEnabled && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80">
-                      <VideoOff className="h-8 w-8 text-white opacity-70" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {callType === "audio" && (
-              <div className="py-8">
-                <div className="w-24 h-24 rounded-full bg-kaaj-100 flex items-center justify-center mb-4 mx-auto">
-                  <User className="h-12 w-12 text-kaaj-500" />
-                </div>
-                <h3 className="text-xl font-medium text-center mb-2">{callRecipient?.name}</h3>
-                <p className="text-kaaj-500 text-center">Audio call in progress</p>
-              </div>
-            )}
-
-            {/* Call controls */}
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <Button
-                onClick={toggleMic}
-                variant="outline"
-                size="icon"
-                className={`rounded-full p-3 ${micMuted ? "bg-red-100 text-red-700 border-red-300" : "bg-gray-100"}`}
-              >
-                {micMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-              </Button>
-
-              {callType === "video" && (
-                <Button
-                  onClick={toggleVideo}
-                  variant="outline"
-                  size="icon"
-                  className={`rounded-full p-3 ${!videoEnabled ? "bg-red-100 text-red-700 border-red-300" : "bg-gray-100"}`}
-                >
-                  {!videoEnabled ? <VideoOff className="h-6 w-6" /> : <Video className="h-6 w-6" />}
-                </Button>
-              )}
-
-              {callType === "video" && (
-                <Button
-                  onClick={toggleScreenSharing}
-                  variant="outline"
-                  size="icon"
-                  className={`rounded-full p-3 ${screenSharing ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-gray-100"}`}
-                >
-                  <Monitor className="h-6 w-6" />
-                </Button>
-              )}
-
-              <Button
-                onClick={endCall}
-                variant="destructive"
-                size="icon"
-                className="rounded-full p-3 bg-red-600 hover:bg-red-700"
-              >
-                {callType === "audio" ? <PhoneOff className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </PageContainer>
   )
 }
