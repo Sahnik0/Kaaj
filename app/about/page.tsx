@@ -124,6 +124,7 @@ export default function About() {
   const navigateTo = (path: string) => {
     router.push(path)
   }
+  
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -311,50 +312,56 @@ export default function About() {
 
         {/* Team section */}
         <section className="py-16 px-4 bg-gray-50 dark:bg-gray-900 relative overflow-hidden">
-          {/* Grid background */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 grid grid-cols-6 md:grid-cols-12">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={`team-grid-col-${i}`} className="border-l border-primary/5 h-full"></div>
-              ))}
-            </div>
-            <div className="absolute inset-0 grid grid-rows-6 md:grid-rows-12">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={`team-grid-row-${i}`} className="border-t border-primary/5 w-full"></div>
-              ))}
-            </div>
-          </div>
+  {/* Grid background */}
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute inset-0 grid grid-cols-6 md:grid-cols-12">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={`team-grid-col-${i}`} className="border-l border-primary/5 h-full"></div>
+      ))}
+    </div>
+    <div className="absolute inset-0 grid grid-rows-6 md:grid-rows-12">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={`team-grid-row-${i}`} className="border-t border-primary/5 w-full"></div>
+      ))}
+    </div>
+  </div>
 
-          <div className="container mx-auto relative z-10">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4 doodle-underline inline-block">{t("about.team.title")}</h2>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">{t("about.team.description")}</p>
-            </div>
+  <div className="container mx-auto relative z-10">
+    <div className="text-center mb-12">
+      <h2 className="text-3xl font-bold mb-4 doodle-underline inline-block">{t("about.team.title")}</h2>
+      <p className="text-xl text-muted-foreground max-w-2xl mx-auto">{t("about.team.description")}</p>
+    </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Team members would go here - using placeholders */}
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={`team-member-${i}`}
-                  className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-200 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]"
-                >
-                  <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-full mb-4 overflow-hidden">
-                    <img
-                      src={`/placeholder.svg?height=200&width=200`}
-                      alt="Team Member"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-1">Team Member {i}</h3>
-                  <p className="text-sm text-primary mb-2">Co-Founder</p>
-                  <p className="text-sm text-muted-foreground">
-                    Passionate about connecting communities and building innovative solutions.
-                  </p>
-                </div>
-              ))}
-            </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {[
+        { img: "/sahnik1.jpg", name: "Sahnik Biswas", role: "Co-Founder" },
+        { img: "/sankalpa.jpg", name: "Sankalpa Sarkar", role: "Co-Founder" },
+        { img: "/Shov_PIC.jpg", name: "Shovon Halder", role: "Co-Founder" },
+        { img: "/shreyas.jpg", name: "Shreyas Saha", role: "Co-Founder" },
+      ].map(({ img, name, role }, index) => (
+        <div
+          key={`team-member-${index}`}
+          className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-200 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]"
+        >
+          <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-full mb-4 overflow-hidden">
+            <img
+              src={img}
+              alt={name}
+              className="w-full h-full object-cover"
+            />
           </div>
-        </section>
+          <h3 className="text-lg font-semibold mb-1">{name}</h3>
+          <p className="text-sm text-primary mb-2">{role}</p>
+          <p className="text-sm text-muted-foreground">
+            Passionate about connecting communities and building innovative solutions.
+          </p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+
 
         {/* CTA Section */}
         <section className="py-16 px-4 bg-primary text-black relative overflow-hidden">

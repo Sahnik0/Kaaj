@@ -192,6 +192,32 @@ export default function Home() {
   const prevTestimonial = () => {
     setCurrentTestimonial((prev) => (prev === 0 ? testimonials.length - 1 : prev - 1))
   }
+const testimonials = [
+  {
+    id: 1,
+    name: "Rekha Roy",
+    role: "Product Manager",
+    rating: 5,
+    content: "This product changed the way we work!",
+    avatar: "/12.jpg", // 👈 unique image
+  },
+  {
+    id: 2,
+    name: "Kartik Roy",
+    role: "Software Engineer",
+    rating: 4,
+    content: "Great experience, will definitely recommend.",
+    avatar: "/Kartik.jpg",
+  },
+  {
+    id: 3,
+    name: "Charlie Lee",
+    role: "UX Designer",
+    rating: 5,
+    content: "Intuitive and beautiful design.",
+    avatar: "/HH.jpg",
+  },
+];
 
   // Auto-scroll testimonials
   useEffect(() => {
@@ -632,7 +658,10 @@ export default function Home() {
                         <p className="text-lg mb-6 italic">{testimonial.content}</p>
                         <div className="flex items-center">
                           <img
-                            src={testimonial.avatar || "/placeholder.svg"}
+                            src={
+  testimonial.avatar ||
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(testimonial.name)}`
+}
                             alt={testimonial.name}
                             className="w-12 h-12 rounded-full border-2 border-primary mr-4"
                           />
