@@ -916,18 +916,21 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       if (ratingData.jobId) {
         const jobDoc = await getDoc(doc(db, "jobs", ratingData.jobId))
         if (!jobDoc.exists()) throw new Error("Job not found")
-        
         const jobData = jobDoc.data()
         if (jobData.status !== "closed") {
           throw new Error("You can only rate users after the job has been completed")
         }
       }
-      
+
+      // Use correct field for rated user
+      const ratedUserId = ratingData.ratedUserId || ratingData.userId
+      if (!ratedUserId) throw new Error("Rated user ID is required")
+
       // Check if user has already rated this user for this job
       const q = query(
         collection(db, "ratings"),
         where("raterId", "==", user.uid),
-        where("ratedUserId", "==", ratingData.userId),
+        where("ratedUserId", "==", ratedUserId),
         where("jobId", "==", ratingData.jobId),
       )
 
@@ -940,40 +943,40 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           review: ratingData.review,
           updatedAt: serverTimestamp(),
         })
-        return
+      } else {
+        // Get rated user's name
+        const ratedUserDoc = await getDoc(doc(db, "users", ratedUserId))
+        const ratedUserName = ratedUserDoc.exists() ? ratedUserDoc.data().displayName : "Unknown User"
+
+        // Create new rating
+        await addDoc(collection(db, "ratings"), {
+          raterId: user.uid,
+          raterName: user.displayName,
+          ratedUserId,
+          ratedUserName,
+          jobId: ratingData.jobId,
+          jobTitle: ratingData.jobTitle,
+          rating: ratingData.rating,
+          review: ratingData.review,
+          createdAt: serverTimestamp(),
+        })
       }
 
-      // Get rated user's name
-      const ratedUserDoc = await getDoc(doc(db, "users", ratingData.userId))
-      const ratedUserName = ratedUserDoc.exists() ? ratedUserDoc.data().displayName : "Unknown User"
+      // Recalculate average rating for the rated user
+      const allRatingsQuery = query(collection(db, "ratings"), where("ratedUserId", "==", ratedUserId))
+      const allRatingsSnapshot = await getDocs(allRatingsQuery)
+      const totalRatings = allRatingsSnapshot.size
+      const sumRatings = allRatingsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().rating || 0), 0)
+      const averageRating = totalRatings > 0 ? sumRatings / totalRatings : 0
 
-      // Create new rating
-      await addDoc(collection(db, "ratings"), {
-        raterId: user.uid,
-        raterName: user.displayName,
-        ratedUserId: ratingData.userId,
-        ratedUserName,
-        jobId: ratingData.jobId,
-        jobTitle: ratingData.jobTitle,
-        rating: ratingData.rating,
-        review: ratingData.review,
-        createdAt: serverTimestamp(),
-      })
-
-      // Update user's average rating
-      const allRatings = await getUserRatings()
-      const totalRatings = allRatings.length + 1 // Include the new rating
-      const sumRatings = allRatings.reduce((sum, r) => sum + r.rating, 0) + ratingData.rating
-      const averageRating = sumRatings / totalRatings
-
-      await updateDoc(doc(db, "users", ratingData.userId), {
+      await updateDoc(doc(db, "users", ratedUserId), {
         averageRating,
         totalRatings,
       })
 
       // Create notification for rated user
       await addDoc(collection(db, "notifications"), {
-        userId: ratingData.userId,
+        userId: ratedUserId,
         type: "rating",
         title: "New Rating",
         message: `${user.displayName} gave you a ${ratingData.rating}-star rating`,
