@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { LandingHeader } from "@/components/landing-header"
 import { DoodleFooter } from "@/components/doodle-footer"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Briefcase, MessageSquare, Star, ChevronLeft, ChevronRight, Quote } from "lucide-react"
+import { ArrowRight, Briefcase, MessageSquare, Star } from "lucide-react"
 import { HomeIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -76,7 +76,7 @@ const translations = {
     "hero.getStarted": "शुरू करें",
     "hero.browseJobs": "नौकरियां ब्राउज़ करें",
     "howItWorks.title": "यह कैसे काम करता है",
-    "hero.description": "हमारा प्लेटफॉर्म स्थानीय अवसरों से जुड़ना आसान बनाता है",
+    "howItWorks.description": "हमारा प्लेटफॉर्म स्थानीय अवसरों से जुड़ना आसान बनाता है",
     "step1.title": "अपना प्रोफ़ाइल बनाएं",
     "step1.description": "नौकरी खोजने वाले या सेवा प्रदाता के रूप में साइन अप करें और अपना प्रोफ़ाइल बनाएं",
     "step2.title": "अवसर खोजें",
@@ -102,62 +102,11 @@ const translations = {
   },
 }
 
-// Testimonial data
-const testimonials = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    role: "Freelance Designer",
-    avatar: "/placeholder.svg?height=60&width=60",
-    content:
-      "This platform completely changed how I find local clients. The interface is intuitive and I've been able to grow my business significantly in just a few months.",
-    rating: 5,
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    role: "Home Service Provider",
-    avatar: "/placeholder.svg?height=60&width=60",
-    content:
-      "As a plumber, finding consistent work used to be challenging. Now I have a steady stream of local jobs and my customer base has expanded tremendously.",
-    rating: 5,
-  },
-  {
-    id: 3,
-    name: "Priya Sharma",
-    role: "Tutor",
-    avatar: "/placeholder.svg?height=60&width=60",
-    content:
-      "The platform made it easy to connect with students in my neighborhood. The verification process gives clients confidence, and the payment system is seamless.",
-    rating: 4,
-  },
-  {
-    id: 4,
-    name: "David Wilson",
-    role: "Small Business Owner",
-    avatar: "/placeholder.svg?height=60&width=60",
-    content:
-      "I've hired multiple professionals through this platform for various projects. The quality of service has been consistently excellent, saving me time and money.",
-    rating: 5,
-  },
-  {
-    id: 5,
-    name: "Emma Rodriguez",
-    role: "Freelance Writer",
-    avatar: "/placeholder.svg?height=60&width=60",
-    content:
-      "The platform's interface is so user-friendly! I've been able to find interesting writing projects in my community that I wouldn't have discovered otherwise.",
-    rating: 5,
-  },
-]
-
 export default function Home() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [activeCategory, setActiveCategory] = useState<number | null>(null)
   const [language, setLanguage] = useState("en")
-  const [currentTestimonial, setCurrentTestimonial] = useState(0)
-  const testimonialsRef = useRef<HTMLDivElement>(null)
 
   // Simple translation function
   const t = (key: string) => {
@@ -184,23 +133,6 @@ export default function Home() {
   const handleCategoryLeave = () => {
     setActiveCategory(null)
   }
-
-  const nextTestimonial = () => {
-    setCurrentTestimonial((prev) => (prev === testimonials.length - 1 ? 0 : prev + 1))
-  }
-
-  const prevTestimonial = () => {
-    setCurrentTestimonial((prev) => (prev === 0 ? testimonials.length - 1 : prev - 1))
-  }
-
-  // Auto-scroll testimonials
-  useEffect(() => {
-    const interval = setInterval(() => {
-      nextTestimonial()
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -283,49 +215,6 @@ export default function Home() {
                     </span>
                   </div>
                 </div>
-
-                {/* Language selector */}
-                <div className="mt-6 flex items-center justify-center lg:justify-start gap-2">
-                  <button
-                    onClick={() => {
-                      setLanguage("en")
-                      localStorage.setItem("language", "en")
-                    }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      language === "en"
-                        ? "bg-primary text-white"
-                        : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    English
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLanguage("bn")
-                      localStorage.setItem("language", "bn")
-                    }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      language === "bn"
-                        ? "bg-primary text-white"
-                        : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    বাংলা
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLanguage("hi")
-                      localStorage.setItem("language", "hi")
-                    }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      language === "hi"
-                        ? "bg-primary text-white"
-                        : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    हिन्दी
-                  </button>
-                </div>
               </div>
 
               <div className="flex-1 relative">
@@ -340,7 +229,7 @@ export default function Home() {
                   <div className="absolute -top-3 -right-3 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full border-2 border-black">
                     NEW
                   </div>
-                  <img src="image.png" alt="Local Jobs" className="w-full rounded-sm" />
+                  <img src="" alt="Local Jobs" className="w-full rounded-sm" />
                   <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -512,172 +401,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Featured Jobs Section */}
-        <section className="py-16 px-4">
-          <div className="container mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4 doodle-underline inline-block">Featured Opportunities</h2>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Discover the latest jobs and services in your area
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Job Card 1 */}
-              <div className="bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-medium text-primary">Full-time</div>
-                  <div className="text-sm text-muted-foreground">Posted 2 days ago</div>
-                </div>
-                <h3 className="text-lg font-bold mb-2">Web Developer</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Looking for an experienced web developer to join our growing team. Remote work available.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">$40-60/hr</div>
-                  <Button variant="outline" size="sm" className="border-black dark:border-white">
-                    Apply Now
-                  </Button>
-                </div>
-              </div>
-
-              {/* Job Card 2 */}
-              <div className="bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-medium text-primary">Part-time</div>
-                  <div className="text-sm text-muted-foreground">Posted 1 day ago</div>
-                </div>
-                <h3 className="text-lg font-bold mb-2">House Cleaning Service</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Professional house cleaning service available for weekly or bi-weekly appointments.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">$25-35/hr</div>
-                  <Button variant="outline" size="sm" className="border-black dark:border-white">
-                    Contact
-                  </Button>
-                </div>
-              </div>
-
-              {/* Job Card 3 */}
-              <div className="bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-medium text-primary">Contract</div>
-                  <div className="text-sm text-muted-foreground">Posted 3 days ago</div>
-                </div>
-                <h3 className="text-lg font-bold mb-2">Math Tutor</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Experienced math tutor available for high school and college students. In-person or online.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">$30-45/hr</div>
-                  <Button variant="outline" size="sm" className="border-black dark:border-white">
-                    Learn More
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-center mt-8">
-              <Button
-                variant="outline"
-                className="border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.8)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                onClick={() => navigateTo("/dashboard/find-jobs")}
-              >
-                View All Opportunities
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials Section */}
-        <section className="py-16 px-4 bg-white dark:bg-gray-800 relative overflow-hidden">
-          {/* Decorative elements */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-20 left-10 w-24 h-24 rounded-full border-2 border-dashed border-primary/20 rotate-12 animate-[spin_20s_linear_infinite]"></div>
-            <div className="absolute bottom-40 right-10 w-16 h-16 rounded-full border-2 border-dotted border-primary/30 -rotate-12 animate-[spin_15s_linear_infinite_reverse]"></div>
-          </div>
-
-          <div className="container mx-auto relative z-10">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4 doodle-underline inline-block">What Our Users Say</h2>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Hear from people who have found success on our platform
-              </p>
-            </div>
-
-            <div className="relative max-w-4xl mx-auto" ref={testimonialsRef}>
-              {/* Testimonial slider */}
-              <div className="overflow-hidden">
-                <div
-                  className="flex transition-transform duration-500 ease-in-out"
-                  style={{ transform: `translateX(-${currentTestimonial * 100}%)` }}
-                >
-                  {testimonials.map((testimonial) => (
-                    <div key={testimonial.id} className="w-full flex-shrink-0 px-4">
-                      <div className="bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,0.8)] p-6 md:p-8 relative">
-                        <div className="absolute -top-5 -left-5 w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                          <Quote className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="mb-6">
-                          <div className="flex">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`w-5 h-5 ${i < testimonial.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-lg mb-6 italic">{testimonial.content}</p>
-                        <div className="flex items-center">
-                          <img
-                            src={testimonial.avatar || "/placeholder.svg"}
-                            alt={testimonial.name}
-                            className="w-12 h-12 rounded-full border-2 border-primary mr-4"
-                          />
-                          <div>
-                            <h4 className="font-bold">{testimonial.name}</h4>
-                            <p className="text-sm text-muted-foreground">{testimonial.role}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Navigation buttons */}
-              <button
-                onClick={prevTestimonial}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 md:-translate-x-12 w-10 h-10 rounded-full bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] flex items-center justify-center hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.8)] transition-all z-10"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={nextTestimonial}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 md:translate-x-12 w-10 h-10 rounded-full bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] flex items-center justify-center hover:translate-y-[2px] hover:translate-x-[-2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.8)] transition-all z-10"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-
-              {/* Dots indicator */}
-              <div className="flex justify-center mt-8 gap-2">
-                {testimonials.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentTestimonial(index)}
-                    className={`w-3 h-3 rounded-full transition-all ${
-                      currentTestimonial === index ? "bg-primary w-6" : "bg-gray-300 dark:bg-gray-600"
-                    }`}
-                    aria-label={`Go to testimonial ${index + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* CTA Section */}
         <section className="py-16 px-4 bg-primary text-black relative overflow-hidden">
           {/* Doodle elements */}
@@ -716,17 +439,6 @@ export default function Home() {
       </main>
 
       <DoodleFooter />
-
-      {/* Floating Chat Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          className="bg-primary text-black w-14 h-14 rounded-full flex items-center justify-center border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-          onClick={() => navigateTo("/dashboard/messages")}
-          aria-label="Chat with us"
-        >
-          <MessageSquare className="h-6 w-6" />
-        </button>
-      </div>
     </div>
   )
 }

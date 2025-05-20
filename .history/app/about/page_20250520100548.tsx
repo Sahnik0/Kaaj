@@ -1,0 +1,837 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { LandingHeader } from "@/components/landing-header"
+import { DoodleFooter } from "@/components/doodle-footer"
+import { Button } from "@/components/ui/button"
+import { ArrowRight, Briefcase, MessageSquare, Star } from "lucide-react"
+import { HomeIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+// Add custom styles for grid background
+const gridBackgroundStyles = `
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .bg-grid-pattern {
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    }
+  }
+`
+
+// Simple translations for essential UI elements
+const translations = {
+  en: {
+    "hero.title": "Find Local Jobs and Services",
+    "hero.description": "Connect with local opportunities and skilled professionals in your neighborhood",
+    "hero.getStarted": "Get Started",
+    "hero.browseJobs": "Browse Jobs",
+    "howItWorks.title": "How It Works",
+    "howItWorks.description": "Our platform makes it easy to connect with local opportunities",
+    "step1.title": "Create Your Profile",
+    "step1.description": "Sign up and create your profile as a job seeker or service provider",
+    "step2.title": "Find Opportunities",
+    "step2.description": "Browse local jobs or post your services for others to discover",
+    "step3.title": "Connect & Earn",
+    "step3.description": "Message, collaborate, and build your local reputation",
+    "categories.title": "Popular Categories",
+    "categories.description": "Explore jobs and services across various categories",
+    "categories.viewAll": "View All Categories",
+    "category.homeServices": "Home Services",
+    "category.homeServices.description": "Cleaning, repairs, gardening, and other household services",
+    "category.professional": "Professional",
+    "category.professional.description": "Accounting, legal, consulting, and business services",
+    "category.creative": "Creative",
+    "category.creative.description": "Design, writing, photography, and artistic services",
+    "category.education": "Education",
+    "category.education.description": "Tutoring, coaching, training, and educational services",
+    "cta.title": "Ready to Get Started?",
+    "cta.description": "Join thousands of people finding local jobs and services in their community.",
+    "cta.signUp": "Sign Up Now",
+    "cta.learnMore": "Learn More",
+    explore: "Explore",
+  },
+  bn: {
+    "hero.title": "স্থানীয় চাকরি এবং পরিষেবা খুঁজুন",
+    "hero.description": "আপনার আশেপাশের সুযোগ এবং দক্ষ পেশাদারদের সাথে সংযোগ করুন",
+    "hero.getStarted": "শুরু করুন",
+    "hero.browseJobs": "চাকরি দেখুন",
+    "howItWorks.title": "কিভাবে কাজ করে",
+    "howItWorks.description": "আমাদের প্ল্যাটফর্ম স্থানীয় সুযোগের সাথে সংযোগ করা সহজ করে",
+    "step1.title": "আপনার প্রোফাইল তৈরি করুন",
+    "step1.description": "চাকরি প্রার্থী বা সেবা প্রদানকারী হিসাবে সাইন আপ করুন এবং আপনার প্রোফাইল তৈরি করুন",
+    "step2.title": "সুযোগ খুঁজুন",
+    "step2.description": "স্থানীয় চাকরি ব্রাউজ করুন বা অন্যরা আবিষ্কার করার জন্য আপনার পরিষেবাগুলি পোস্ট করুন",
+    "step3.title": "সংযোগ করুন এবং উপার্জন করুন",
+    "step3.description": "বার্তা পাঠান, সহযোগিতা করুন এবং আপনার স্থানীয় খ্যাতি তৈরি করুন",
+    "categories.title": "জনপ্রিয় বিভাগ",
+    "categories.description": "বিভিন্ন বিভাগে চাকরি এবং পরিষেবা অন্বেষণ করুন",
+    "categories.viewAll": "সমস্ত বিভাগ দেখুন",
+    "category.homeServices": "গৃহ পরিষেবা",
+    "category.homeServices.description": "পরিষ্কার, মেরামত, বাগান, এবং অন্যান্য গৃহস্থালী পরিষেবা",
+    "category.professional": "পেশাদার",
+    "category.professional.description": "অ্যাকাউন্টিং, আইনি, পরামর্শ, এবং ব্যবসায়িক পরিষেবা",
+    "category.creative": "সৃজনশীল",
+    "category.creative.description": "ডিজাইন, লেখা, ফটোগ্রাফি, এবং শিল্প পরিষেবা",
+    "category.education": "শিক্ষা",
+    "category.education.description": "টিউটরিং, কোচিং, প্রশিক্ষণ, এবং শিক্ষামূলক পরিষেবা",
+    "cta.title": "শুরু করতে প্রস্তুত?",
+    "cta.description": "হাজার হাজার মানুষের সাথে যোগ দিন যারা তাদের সম্প্রদায়ে স্থানীয় চাকরি এবং পরিষেবা খুঁজে পাচ্ছে।",
+    "cta.signUp": "এখনই সাইন আপ করুন",
+    "cta.learnMore": "আরও জানুন",
+    explore: "অন্বেষণ করুন",
+  },
+  hi: {
+    "hero.title": "स्थानीय नौकरियां और सेवाएं खोजें",
+    "hero.description": "अपने आस-पास के अवसरों और कुशल पेशेवरों से जुड़ें",
+    "hero.getStarted": "शुरू करें",
+    "hero.browseJobs": "नौकरियां ब्राउज़ करें",
+    "howItWorks.title": "यह कैसे काम करता है",
+    "howItWorks.description": "हमारा प्लेटफॉर्म स्थानीय अवसरों से जुड़ना आसान बनाता है",
+    "step1.title": "अपना प्रोफ़ाइल बनाएं",
+    "step1.description": "नौकरी खोजने वाले या सेवा प्रदाता के रूप में साइन अप करें और अपना प्रोफ़ाइल बनाएं",
+    "step2.title": "अवसर खोजें",
+    "step2.description": "स्थानीय नौकरियां ब्राउज़ करें या दूसरों के लिए अपनी सेवाएं पोस्ट करें",
+    "step3.title": "जुड़ें और कमाएं",
+    "step3.description": "संदेश भेजें, सहयोग करें, और अपनी स्थानीय प्रतिष्ठा बनाएं",
+    "categories.title": "लो���प्रिय श्रेणियाँ",
+    "categories.description": "विभिन्न श्रेणियों में नौकरियां और सेवाएं खोजें",
+    "categories.viewAll": "सभी श्रेणियां देखें",
+    "category.homeServices": "घरेलू सेवाएं",
+    "category.homeServices.description": "सफाई, मरम्मत, बागवानी, और अन्य घरेलू सेवाएं",
+    "category.professional": "पेशेवर",
+    "category.professional.description": "लेखा, कानूनी, परामर्श, और व्यापारिक सेवाएं",
+    "category.creative": "रचनात्मक",
+    "category.creative.description": "डिज़ाइन, लेखन, फोटोग्राफी, और कलात्मक सेवाएं",
+    "category.education": "शिक्षा",
+    "category.education.description": "ट्यूटरिंग, कोचिंग, प्रशिक्षण, और शैक्षिक सेवाएं",
+    "cta.title": "शुरू करने के लिए तैयार हैं?",
+    "cta.description": "हजारों लोगों के साथ जुड़ें जो अपने समुदाय में स्थानीय नौकरियां और सेवाएं खोज रहे हैं।",
+    "cta.signUp": "अभी साइन अप करें",
+    "cta.learnMore": "अधिक जानें",
+    explore: "खोजें",
+  },
+}
+
+export default function Home() {
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<number | null>(null)
+  const [language, setLanguage] = useState("en")
+
+  // Simple translation function
+  const t = (key: string) => {
+    return translations[language as keyof typeof translations]?.[key as keyof (typeof translations)["en"]] || key
+  }
+
+  // Handle hydration mismatch by only rendering animations after mount
+  useEffect(() => {
+    setMounted(true)
+    const savedLanguage = localStorage.getItem("language")
+    if (savedLanguage && ["en", "bn", "hi"].includes(savedLanguage)) {
+      setLanguage(savedLanguage)
+    }
+  }, [])
+
+  const navigateTo = (path: string) => {
+    router.push(path)
+  }
+
+  const handleCategoryHover = (index: number) => {
+    setActiveCategory(index)
+  }
+
+  const handleCategoryLeave = () => {
+    setActiveCategory(null)
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <style jsx global>
+        {gridBackgroundStyles}
+      </style>
+      <LandingHeader />
+
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="relative overflow-hidden bg-[#f0f8ff] dark:from-gray-900 dark:to-gray-800 py-12 md:py-20 lg:py-28">
+          {/* Grid background */}
+          <div className="absolute inset-0 bg-[#f0f8ff] dark:bg-gray-900 bg-grid-pattern pointer-events-none"></div>
+          {/* Animated background elements */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-20 left-10 w-24 h-24 rounded-full border-2 border-dashed border-primary/20 rotate-12 animate-[spin_20s_linear_infinite]"></div>
+            <div className="absolute bottom-40 right-10 w-16 h-16 rounded-full border-2 border-dotted border-primary/30 -rotate-12 animate-[spin_15s_linear_infinite_reverse]"></div>
+            <div className="absolute top-1/3 left-1/4 w-12 h-12 border-2 border-primary/20 transform rotate-45 animate-[bounce_6s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/4 right-1/3 w-20 h-20 rounded-full bg-primary/5 animate-[pulse_4s_ease-in-out_infinite]"></div>
+            <div className="absolute bottom-1/4 left-1/3 w-32 h-32 rounded-full bg-secondary/5 animate-[pulse_7s_ease-in-out_infinite]"></div>
+          </div>
+
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="flex flex-col lg:flex-row items-center gap-12">
+              <div className="flex-1 text-center lg:text-left max-w-2xl mx-auto lg:mx-0">
+                <div className="inline-block mb-3 px-4 py-1 bg-primary/10 rounded-full border border-primary/20">
+                  <span className="text-sm font-medium text-primary">
+                    ✨ {t("hero.title").split(" ")[0]} {t("hero.title").split(" ")[1]}
+                  </span>
+                </div>
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+                  <span className="doodle-underline inline-block relative">
+                    {t("hero.title")}
+                    <span className="absolute -top-6 right-0 text-5xl transform rotate-12 opacity-70">🔍</span>
+                  </span>
+                </h1>
+                <p className="text-xl text-muted-foreground mb-8 max-w-xl">{t("hero.description")}</p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                  <Button
+                    size="lg"
+                    className="retro-button group relative overflow-hidden"
+                    onClick={() => navigateTo("/auth/signup")}
+                  >
+                    <span className="relative z-10">{t("hero.getStarted")}</span>
+                    <span className="absolute inset-0 bg-primary/20 transform translate-y-full group-hover:translate-y-0 transition-transform duration-200"></span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-2 border-black dark:border-white hover:bg-primary/20 transition-colors group relative"
+                    onClick={() => navigateTo("/dashboard/find-jobs")}
+                  >
+                    <span className="relative z-10 flex items-center">
+                      {t("hero.browseJobs")}
+                      <ArrowRight className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </Button>
+                </div>
+
+                {/* Trust indicators */}
+                <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-6">
+                  <div className="flex items-center">
+                    <div className="flex -space-x-2">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-800 flex items-center justify-center text-xs font-medium"
+                        >
+                          {i}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="ml-3 text-sm text-gray-600 dark:text-gray-300">1,000+ active users</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Star key={i} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                      ))}
+                    </div>
+                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-300">4.9/5 rating</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 relative">
+                <div className="absolute -top-10 -left-10 w-24 h-24 bg-primary/10 rounded-full blur-xl"></div>
+                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-secondary/10 rounded-full blur-xl"></div>
+
+                <div
+                  className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,0.8)] p-4 max-w-md mx-auto ${
+                    mounted ? "animate-[float_6s_ease-in-out_infinite]" : ""
+                  }`}
+                >
+                  <div className="absolute -top-3 -right-3 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full border-2 border-black">
+                    NEW
+                  </div>
+                  <img src="/placeholder.svg?height=400&width=500" alt="Local Jobs" className="w-full rounded-sm" />
+                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <MessageSquare className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-sm">Connect with local professionals</h3>
+                        <p className="text-xs text-muted-foreground mt-1">Find trusted experts in your neighborhood</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Features section */}
+        <section className="py-16 px-4 relative">
+          {/* Grid background */}
+          <div className="absolute inset-0 bg-white dark:bg-gray-900 bg-grid-pattern pointer-events-none"></div>
+          <div className="container mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4 relative inline-block">
+                {t("howItWorks.title")}
+                <span className="absolute bottom-0 left-0 w-full h-2 bg-yellow-400"></span>
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">{t("howItWorks.description")}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Step 1 */}
+              <div
+                className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]"
+                onClick={() => navigateTo("/auth/signup")}
+              >
+                <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                  <span className="text-yellow-500 font-bold text-xl">1</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-3">{t("step1.title")}</h3>
+                <p className="text-muted-foreground">{t("step1.description")}</p>
+              </div>
+
+              {/* Step 2 */}
+              <div
+                className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]"
+                onClick={() => navigateTo("/dashboard/find-jobs")}
+              >
+                <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                  <span className="text-yellow-500 font-bold text-xl">2</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-3">{t("step2.title")}</h3>
+                <p className="text-muted-foreground">{t("step2.description")}</p>
+              </div>
+
+              {/* Step 3 */}
+              <div
+                className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]"
+                onClick={() => navigateTo("/dashboard/messages")}
+              >
+                <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                  <span className="text-yellow-500 font-bold text-xl">3</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-3">{t("step3.title")}</h3>
+                <p className="text-muted-foreground">{t("step3.description")}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Categories section */}
+        <section className="py-16 px-4 bg-gray-50 dark:bg-gray-900">
+          <div className="container mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4 doodle-underline inline-block">{t("categories.title")}</h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">{t("categories.description")}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Category 1 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-300 ${
+                  activeCategory === 0 ? "scale-105" : ""
+                }`}
+                onMouseEnter={() => handleCategoryHover(0)}
+                onMouseLeave={handleCategoryLeave}
+                onClick={() => navigateTo("/categories/home-services")}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <HomeIcon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold">{t("category.homeServices")}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">{t("category.homeServices.description")}</p>
+                <div className="text-primary text-sm font-medium flex items-center">
+                  {t("explore")} <ArrowRight className="h-4 w-4 ml-1" />
+                </div>
+              </div>
+
+              {/* Category 2 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-300 ${
+                  activeCategory === 1 ? "scale-105" : ""
+                }`}
+                onMouseEnter={() => handleCategoryHover(1)}
+                onMouseLeave={handleCategoryLeave}
+                onClick={() => navigateTo("/categories/professional")}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold">{t("category.professional")}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">{t("category.professional.description")}</p>
+                <div className="text-primary text-sm font-medium flex items-center">
+                  {t("explore")} <ArrowRight className="h-4 w-4 ml-1" />
+                </div>
+              </div>
+
+              {/* Category 3 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-300 ${
+                  activeCategory === 2 ? "scale-105" : ""
+                }`}
+                onMouseEnter={() => handleCategoryHover(2)}
+                onMouseLeave={handleCategoryLeave}
+                onClick={() => navigateTo("/categories/creative")}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Star className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold">{t("category.creative")}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">{t("category.creative.description")}</p>
+                <div className="text-primary text-sm font-medium flex items-center">
+                  {t("explore")} <ArrowRight className="h-4 w-4 ml-1" />
+                </div>
+              </div>
+
+              {/* Category 4 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-4 h-full transition-all duration-300 ${
+                  activeCategory === 3 ? "scale-105" : ""
+                }`}
+                onMouseEnter={() => handleCategoryHover(3)}
+                onMouseLeave={handleCategoryLeave}
+                onClick={() => navigateTo("/categories/education")}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold">{t("category.education")}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">{t("category.education.description")}</p>
+                <div className="text-primary text-sm font-medium flex items-center">
+                  {t("explore")} <ArrowRight className="h-4 w-4 ml-1" />
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center mt-12">
+              <Button
+                variant="outline"
+                className="border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.8)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                onClick={() => navigateTo("/categories")}
+              >
+                {t("categories.viewAll")}
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-16 px-4 bg-primary text-black relative overflow-hidden">
+          {/* Doodle elements */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-10 right-10 w-20 h-20 rounded-full border-2 border-dashed border-black/20 rotate-12"></div>
+            <div className="absolute bottom-20 left-10 w-16 h-16 rounded-full border-2 border-dotted border-black/30 -rotate-12"></div>
+            <div className="absolute top-1/2 right-1/4 w-12 h-12 border-2 border-black/20 transform rotate-45"></div>
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="relative bg-white dark:bg-gray-800 border-4 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-8 max-w-3xl mx-auto">
+              <div className="text-center">
+                <h2 className="text-3xl md:text-4xl font-bold mb-6">{t("cta.title")}</h2>
+                <p className="text-xl text-muted-foreground mb-8">{t("cta.description")}</p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button
+                    size="lg"
+                    className="bg-primary hover:bg-primary/90 text-black border-2 border-black"
+                    onClick={() => navigateTo("/auth/signup")}
+                  >
+                    {t("cta.signUp")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-2 border-black dark:border-white hover:bg-primary/20"
+                    onClick={() => navigateTo("/how-it-works")}
+                  >
+                    {t("cta.learnMore")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <DoodleFooter />
+    </div>
+  )
+}
+"use client"
+
+import { useState, useEffect } from "react"
+import { LandingHeader } from "@/components/landing-header"
+import { DoodleFooter } from "@/components/doodle-footer"
+import { Button } from "@/components/ui/button"
+import { Building, Users, Heart, Award } from "lucide-react"
+import Link from "next/link"
+
+export default function AboutUs() {
+  const [mounted, setMounted] = useState(false)
+
+  // Handle hydration mismatch by only rendering animations after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <LandingHeader />
+
+      <main className="flex-1">
+        {/* Hero Section with Grid Background */}
+        <section className="relative bg-blue-50 dark:bg-gray-900 overflow-hidden">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-12 pointer-events-none">
+            {Array.from({ length: 13 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto px-4 py-16 md:py-24 relative z-10">
+            <div className="max-w-3xl mx-auto text-center mb-12">
+              <div className="inline-block mb-3 px-4 py-1 bg-primary/10 rounded-full border border-primary/20">
+                <span className="text-sm font-medium text-primary">Our Story</span>
+              </div>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+                About Us
+                <span className="block h-2 w-32 bg-yellow-400 mt-2 mx-auto"></span>
+              </h1>
+              <p className="text-xl text-muted-foreground">
+                We're on a mission to connect local talent with opportunities in their community
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div className="flex flex-wrap justify-center gap-8 mb-16">
+              <div className="flex items-center">
+                <div className="flex -space-x-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-800 flex items-center justify-center text-xs font-medium"
+                    >
+                      {i}
+                    </div>
+                  ))}
+                </div>
+                <span className="ml-3 text-sm text-muted-foreground">
+                  <span className="font-medium">1,000+ active users</span>
+                </span>
+              </div>
+              <div className="flex items-center">
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <svg
+                      key={i}
+                      className="w-4 h-4 text-yellow-400 fill-yellow-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="ml-2 text-sm text-muted-foreground">
+                  <span className="font-medium">4.9/5 rating</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Our Mission */}
+        <section className="py-16 px-4 relative">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
+            {Array.from({ length: 7 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="max-w-3xl mx-auto text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4">
+                Our Mission
+                <span className="block h-2 w-24 bg-yellow-400 mt-2 mx-auto"></span>
+              </h2>
+              <p className="text-xl text-muted-foreground mb-8">
+                We believe in the power of local communities and the talent that exists within them.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Building className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">Connecting Communities</h3>
+                <p className="text-muted-foreground">
+                  Our platform bridges the gap between local talent and opportunities, fostering stronger, more
+                  self-sufficient communities where skills and services can be exchanged easily.
+                </p>
+              </div>
+
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Heart className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">Empowering Individuals</h3>
+                <p className="text-muted-foreground">
+                  We empower people to showcase their skills, find meaningful work, and build their reputation within
+                  their local community, creating economic opportunities for everyone.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Our Story */}
+        <section className="py-16 px-4 bg-blue-50 dark:bg-gray-900 relative">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
+            {Array.from({ length: 7 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex flex-col md:flex-row gap-12 items-center">
+                <div className="flex-1">
+                  <h2 className="text-3xl font-bold mb-4">
+                    Our Story
+                    <span className="block h-2 w-24 bg-yellow-400 mt-2"></span>
+                  </h2>
+                  <p className="text-muted-foreground mb-4">
+                    Founded in 2023, our platform was born from a simple observation: despite living in an increasingly
+                    connected world, many people struggle to find local services or job opportunities in their own
+                    neighborhoods.
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    Our founders experienced this firsthand when trying to find local help for various projects. They
+                    realized there was a disconnect between local talent and those seeking services.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Today, we're proud to have connected thousands of individuals with local opportunities, helping
+                    communities thrive by keeping skills and economic activity local.
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <div
+                    className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,0.8)] p-4 ${mounted ? "animate-[float_6s_ease-in-out_infinite]" : ""}`}
+                  >
+                    <img src="/placeholder.svg?height=400&width=500" alt="Our team" className="w-full rounded-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Our Team */}
+        <section className="py-16 px-4 relative">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
+            {Array.from({ length: 7 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="max-w-3xl mx-auto text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4">
+                Meet Our Team
+                <span className="block h-2 w-24 bg-yellow-400 mt-2 mx-auto"></span>
+              </h2>
+              <p className="text-xl text-muted-foreground">The passionate people behind our mission</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              {/* Team Member 1 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="mb-4 relative">
+                  <div className="w-24 h-24 rounded-full overflow-hidden mx-auto border-2 border-black dark:border-white">
+                    <img
+                      src="/placeholder.svg?height=100&width=100"
+                      alt="Team member"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-xl font-semibold mb-1 text-center">Sarah Johnson</h3>
+                <p className="text-primary text-sm font-medium text-center mb-3">Co-Founder & CEO</p>
+                <p className="text-muted-foreground text-center text-sm">
+                  With 10+ years in community building, Sarah leads our vision to connect local talent with
+                  opportunities.
+                </p>
+              </div>
+
+              {/* Team Member 2 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="mb-4 relative">
+                  <div className="w-24 h-24 rounded-full overflow-hidden mx-auto border-2 border-black dark:border-white">
+                    <img
+                      src="/placeholder.svg?height=100&width=100"
+                      alt="Team member"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-xl font-semibold mb-1 text-center">Michael Chen</h3>
+                <p className="text-primary text-sm font-medium text-center mb-3">Co-Founder & CTO</p>
+                <p className="text-muted-foreground text-center text-sm">
+                  Michael brings technical expertise from his years at leading tech companies to build our innovative
+                  platform.
+                </p>
+              </div>
+
+              {/* Team Member 3 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="mb-4 relative">
+                  <div className="w-24 h-24 rounded-full overflow-hidden mx-auto border-2 border-black dark:border-white">
+                    <img
+                      src="/placeholder.svg?height=100&width=100"
+                      alt="Team member"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-xl font-semibold mb-1 text-center">Aisha Patel</h3>
+                <p className="text-primary text-sm font-medium text-center mb-3">Head of Community</p>
+                <p className="text-muted-foreground text-center text-sm">
+                  Aisha's background in community organizing helps us create meaningful connections between users.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Values */}
+        <section className="py-16 px-4 bg-blue-50 dark:bg-gray-900 relative">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
+            {Array.from({ length: 7 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="max-w-3xl mx-auto text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4">
+                Our Values
+                <span className="block h-2 w-24 bg-yellow-400 mt-2 mx-auto"></span>
+              </h2>
+              <p className="text-xl text-muted-foreground">The principles that guide everything we do</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              {/* Value 1 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Users className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">Community First</h3>
+                <p className="text-muted-foreground">
+                  We believe in the power of local communities and prioritize creating value for all our users.
+                </p>
+              </div>
+
+              {/* Value 2 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Award className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">Quality & Trust</h3>
+                <p className="text-muted-foreground">
+                  We maintain high standards and build trust through transparency, reliability, and exceptional
+                  experiences.
+                </p>
+              </div>
+
+              {/* Value 3 */}
+              <div
+                className={`relative bg-white dark:bg-gray-800 border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.8)] p-6 h-full transition-all duration-200 ${mounted ? "hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,0.8)]" : ""}`}
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Heart className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">Inclusivity</h3>
+                <p className="text-muted-foreground">
+                  We create opportunities for everyone, regardless of background, and celebrate the diversity of our
+                  communities.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-16 px-4 relative">
+          {/* Grid Background */}
+          <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
+            {Array.from({ length: 7 }).map((_, rowIndex) =>
+              Array.from({ length: 13 }).map((_, colIndex) => (
+                <div key={`${rowIndex}-${colIndex}`} className="border-[0.5px] border-gray-200 dark:border-gray-800" />
+              )),
+            )}
+          </div>
+
+          <div className="container mx-auto relative z-10">
+            <div className="relative bg-primary text-black border-4 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,0.8)] p-8 max-w-3xl mx-auto">
+              <div className="text-center">
+                <h2 className="text-3xl md:text-4xl font-bold mb-6">Join Our Community</h2>
+                <p className="text-xl mb-8">
+                  Be part of our mission to connect local talent with opportunities in their community.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button size="lg" className="bg-black hover:bg-black/90 text-white border-2 border-black" asChild>
+                    <Link href="/auth/signup">Sign Up Now</Link>
+                  </Button>
+                  <Button variant="outline" size="lg" className="border-2 border-black hover:bg-black/10" asChild>
+                    <Link href="/contact">Contact Us</Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <DoodleFooter />
+    </div>
+  )
+}
