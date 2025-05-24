@@ -22,6 +22,10 @@ import {
   Clock,
   CheckCheck,
   Check,
+  Pin,
+  PinOff,
+  Archive,
+  Trash2,
 } from "lucide-react"
 import { RetroBox } from "@/components/ui/retro-box"
 import { useLanguage } from "@/lib/i18n/language-context"
@@ -29,9 +33,25 @@ import { useRetroToast } from "@/hooks/use-retro-toast"
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ConversationProps {
   params: {
@@ -57,6 +77,8 @@ interface Conversation {
   lastMessageRead: boolean
   jobId?: string
   jobTitle?: string
+  isPinned?: boolean
+  isArchived?: boolean
 }
 
 export default function EnhancedConversationPage({ params }: ConversationProps) {
@@ -69,6 +91,10 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     markAllConversationMessagesAsRead,
     markConversationMessageAsRead,
     markConversationMessageAsUnread,
+    pinConversation,
+    unpinConversation,
+    archiveConversation,
+    deleteConversation,
   } = useFirebase()
 
   // State management
@@ -79,6 +105,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Refs
   const router = useRouter()
@@ -145,6 +172,78 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     },
     [conversation],
   )
+
+  // Conversation management functions
+  const handlePinConversation = async () => {
+    if (!conversation) return
+
+    try {
+      if (conversation.isPinned) {
+        await unpinConversation?.(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: false } : null))
+        toast({
+          title: "Success",
+          description: "Conversation unpinned",
+        })
+      } else {
+        await pinConversation?.(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: true } : null))
+        toast({
+          title: "Success",
+          description: "Conversation pinned",
+        })
+      }
+    } catch (error) {
+      console.error("Error pinning/unpinning conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleArchiveConversation = async () => {
+    if (!conversation) return
+
+    try {
+      await archiveConversation?.(conversation.id)
+      toast({
+        title: "Success",
+        description: "Conversation archived",
+      })
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error archiving conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to archive conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteConversation = async () => {
+    if (!conversation) return
+
+    try {
+      await deleteConversation?.(conversation.id)
+      toast({
+        title: "Success",
+        description: "Conversation deleted",
+      })
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error deleting conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete conversation",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleteDialogOpen(false)
+    }
+  }
 
   // Fetch conversation and messages
   useEffect(() => {
@@ -383,6 +482,9 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                     </AvatarFallback>
                   </Avatar>
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                  {conversation.isPinned && (
+                    <Pin className="absolute -top-1 -left-1 w-4 h-4 text-yellow-600 fill-yellow-300 drop-shadow-sm" />
+                  )}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-black">{otherUser.displayName}</h2>
@@ -430,25 +532,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                   </Tooltip>
                 </TooltipProvider>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                  >
-                    <DropdownMenuItem>View Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Block User</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Report</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+               
               </div>
             </div>
           </div>
@@ -659,38 +743,6 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                             "🤩",
                             "🥳",
                             "😏",
-                            "😒",
-                            "😞",
-                            "😔",
-                            "😟",
-                            "😕",
-                            "🙁",
-                            "☹️",
-                            "😣",
-                            "😖",
-                            "😫",
-                            "😩",
-                            "🥺",
-                            "😢",
-                            "😭",
-                            "😤",
-                            "😠",
-                            "😡",
-                            "🤬",
-                            "🤯",
-                            "😳",
-                            "🥵",
-                            "🥶",
-                            "😱",
-                            "😨",
-                            "😰",
-                            "😥",
-                            "😓",
-                            "🤗",
-                            "🤔",
-                            "🤭",
-                            "🤫",
-                            "🤥",
                             "👍",
                             "👎",
                             "👌",
@@ -757,7 +809,19 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
               </div>
 
               {/* Quick reactions */}
-              
+              <div className="flex gap-3 justify-center items-center">
+                <span className="text-xs text-gray-600 font-medium">Quick reactions:</span>
+                {["👍", "❤️", "😂", "😮", "👏", "🔥", "💯", "🎉"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="text-lg hover:scale-125 transition-transform hover:bg-yellow-200 rounded-full p-1 border border-transparent hover:border-black"
+                    onClick={() => setNewMessage((prev) => prev + emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               {/* Typing indicator */}
               <AnimatePresence>
@@ -793,6 +857,33 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
           </div>
         </RetroBox>
       </motion.div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold">Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-600">
+              Are you sure you want to delete this conversation with {otherUser?.displayName}? This action cannot be
+              undone and all messages will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConversation}
+              className="bg-red-500 hover:bg-red-600 text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

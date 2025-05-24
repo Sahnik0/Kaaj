@@ -15,13 +15,15 @@ import {
   ArrowLeft,
   Loader2,
   MoreVertical,
-  Phone,
-  Video,
   Smile,
   MessageCircle,
   Clock,
   CheckCheck,
   Check,
+  Pin,
+  PinOff,
+  Archive,
+  Trash2,
 } from "lucide-react"
 import { RetroBox } from "@/components/ui/retro-box"
 import { useLanguage } from "@/lib/i18n/language-context"
@@ -29,9 +31,16 @@ import { useRetroToast } from "@/hooks/use-retro-toast"
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { CallIntegration } from "./call-integration"
 
 interface ConversationProps {
   params: {
@@ -57,6 +66,8 @@ interface Conversation {
   lastMessageRead: boolean
   jobId?: string
   jobTitle?: string
+  isPinned?: boolean
+  isArchived?: boolean
 }
 
 export default function EnhancedConversationPage({ params }: ConversationProps) {
@@ -69,7 +80,44 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     markAllConversationMessagesAsRead,
     markConversationMessageAsRead,
     markConversationMessageAsUnread,
+    pinConversation,
+    unpinConversation,
+    archiveConversation,
+    deleteConversation,
   } = useFirebase()
+
+  // Add these fallback functions at the top of the component
+  const safeMarkConversationMessageAsRead = useCallback(
+    async (conversationId: string, messageId: string) => {
+      try {
+        if (markConversationMessageAsRead) {
+          await markConversationMessageAsRead(conversationId, messageId)
+        } else {
+          console.warn("markConversationMessageAsRead function not available")
+        }
+      } catch (error) {
+        console.error("Error marking message as read:", error)
+      }
+    },
+    [markConversationMessageAsRead],
+  )
+
+  const safeMarkConversationMessageAsUnread = useCallback(
+    async (conversationId: string, messageId: string) => {
+      try {
+        if (markConversationMessageAsUnread) {
+          await markConversationMessageAsUnread(conversationId, messageId)
+        } else {
+          console.warn("markConversationMessageAsUnread function not available")
+        }
+      } catch (error) {
+        console.error("Error marking message as unread:", error)
+      }
+    },
+    [markConversationMessageAsUnread],
+  )
+
+  const { toast } = useRetroToast()
 
   // State management
   const [conversation, setConversation] = useState<Conversation | null>(null)
@@ -79,11 +127,11 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Refs
   const router = useRouter()
   const { t } = useLanguage()
-  const { toast } = useRetroToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -146,6 +194,105 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     [conversation],
   )
 
+  // Conversation management functions
+  const handlePinConversation = async () => {
+    if (!conversation) return
+
+    try {
+      if (!pinConversation || !unpinConversation) {
+        toast({
+          title: "Feature Unavailable",
+          description: "Pin/Unpin functionality is not implemented",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (conversation.isPinned) {
+        await unpinConversation(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: false } : null))
+        toast({
+          title: "Success",
+          description: "Conversation unpinned",
+        })
+      } else {
+        await pinConversation(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: true } : null))
+        toast({
+          title: "Success",
+          description: "Conversation pinned",
+        })
+      }
+    } catch (error) {
+      console.error("Error pinning/unpinning conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleArchiveConversation = async () => {
+    if (!conversation) return
+
+    try {
+      if (!archiveConversation) {
+        toast({
+          title: "Feature Unavailable",
+          description: "Archive functionality is not implemented",
+          variant: "destructive",
+        })
+        return
+      }
+
+      await archiveConversation(conversation.id)
+      toast({
+        title: "Success",
+        description: "Conversation archived",
+      })
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error archiving conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to archive conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteConversation = async () => {
+    if (!conversation) return
+
+    try {
+      if (!deleteConversation) {
+        toast({
+          title: "Feature Unavailable",
+          description: "Delete functionality is not implemented",
+          variant: "destructive",
+        })
+        return
+      }
+
+      await deleteConversation(conversation.id)
+      toast({
+        title: "Success",
+        description: "Conversation deleted",
+      })
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error deleting conversation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete conversation",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleteDialogOpen(false)
+    }
+  }
+
   // Fetch conversation and messages
   useEffect(() => {
     async function fetchData() {
@@ -191,7 +338,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     }
 
     fetchData()
-  }, [user, id, getConversationById, router, toast])
+  }, [user, id, getConversationById, router])
 
   // Real-time messages listener with enhanced read status management
   useEffect(() => {
@@ -247,7 +394,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
         router.push("/dashboard/messages")
       }
     }
-  }, [conversation, user, loading, router, toast])
+  }, [conversation, user, loading, router])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -303,15 +450,37 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId))
       // Restore message content
       setNewMessage(messageContent)
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      })
     } finally {
       setSending(false)
     }
   }
+
+  // Add this useEffect to debug Firebase functions availability
+  useEffect(() => {
+    console.log("Firebase functions availability:", {
+      getConversationById: !!getConversationById,
+      getMessages: !!getMessages,
+      sendMessage: !!sendMessage,
+      markAllConversationMessagesAsRead: !!markAllConversationMessagesAsRead,
+      markConversationMessageAsRead: !!markConversationMessageAsRead,
+      markConversationMessageAsUnread: !!markConversationMessageAsUnread,
+      pinConversation: !!pinConversation,
+      unpinConversation: !!unpinConversation,
+      archiveConversation: !!archiveConversation,
+      deleteConversation: !!deleteConversation,
+    })
+  }, [
+    getConversationById,
+    getMessages,
+    sendMessage,
+    markAllConversationMessagesAsRead,
+    markConversationMessageAsRead,
+    markConversationMessageAsUnread,
+    pinConversation,
+    unpinConversation,
+    archiveConversation,
+    deleteConversation,
+  ])
 
   if (loading) {
     return (
@@ -383,6 +552,9 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                     </AvatarFallback>
                   </Avatar>
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                  {conversation.isPinned && (
+                    <Pin className="absolute -top-1 -left-1 w-4 h-4 text-yellow-600 fill-yellow-300 drop-shadow-sm" />
+                  )}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-black">{otherUser.displayName}</h2>
@@ -400,35 +572,16 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
               </div>
 
               <div className="flex gap-3">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-green-100 hover:bg-green-200 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                      >
-                        <Phone className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Start audio call</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-blue-100 hover:bg-blue-200 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                      >
-                        <Video className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Start video call</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <CallIntegration
+                  recipientId={otherUser.id}
+                  recipientName={otherUser.displayName}
+                  onCallEnd={() => {
+                    toast({
+                      title: "Call Ended",
+                      description: "The call has been ended",
+                    })
+                  }}
+                />
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -444,9 +597,28 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                     align="end"
                     className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                   >
-                    <DropdownMenuItem>View Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Block User</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Report</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePinConversation}>
+                      {conversation.isPinned ? (
+                        <>
+                          <PinOff className="h-4 w-4 mr-2" />
+                          Unpin Conversation
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="h-4 w-4 mr-2" />
+                          Pin Conversation
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleArchiveConversation}>
+                      <Archive className="h-4 w-4 mr-2" />
+                      Archive
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-red-600" onClick={() => setDeleteDialogOpen(true)}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -518,9 +690,9 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                                             className="h-6 w-6 p-0 hover:bg-gray-100"
                                             onClick={() => {
                                               if (message.read) {
-                                                markConversationMessageAsUnread(id, message.id)
+                                                safeMarkConversationMessageAsUnread(id, message.id)
                                               } else {
-                                                markConversationMessageAsRead(id, message.id)
+                                                safeMarkConversationMessageAsRead(id, message.id)
                                               }
                                             }}
                                           >
@@ -659,38 +831,6 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                             "🤩",
                             "🥳",
                             "😏",
-                            "😒",
-                            "😞",
-                            "😔",
-                            "😟",
-                            "😕",
-                            "🙁",
-                            "☹️",
-                            "😣",
-                            "😖",
-                            "😫",
-                            "😩",
-                            "🥺",
-                            "😢",
-                            "😭",
-                            "😤",
-                            "😠",
-                            "😡",
-                            "🤬",
-                            "🤯",
-                            "😳",
-                            "🥵",
-                            "🥶",
-                            "😱",
-                            "😨",
-                            "😰",
-                            "😥",
-                            "😓",
-                            "🤗",
-                            "🤔",
-                            "🤭",
-                            "🤫",
-                            "🤥",
                             "👍",
                             "👎",
                             "👌",
@@ -702,93 +842,20 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                             "👏",
                             "🙌",
                             "🤝",
-                            "🙏",
-                            "❤️",
-                            "🧡",
-                            "💛",
-                            "💚",
-                            "💙",
-                            "💜",
-                            "🖤",
-                            "🤍",
-                            "🤎",
-                            "💔",
-                            "❣️",
-                            "💕",
-                            "💞",
-                            "💓",
-                            "💗",
-                            "💖",
-                            "💘",
-                            "💝",
-                            "💟",
-                            "🔥",
-                            "💯",
-                            "💢",
-                            "💥",
-                            "💫",
-                            "💦",
-                            "💨",
-                            "💣",
-                            "💬",
-                          ].map((emoji) => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              className="p-2 hover:bg-yellow-100 rounded-lg text-lg transition-all hover:scale-110 transform border border-transparent hover:border-black"
-                              onClick={() => setNewMessage((prev) => prev + emoji)}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
+                          ]}
                         </div>
                       </PopoverContent>
                     </Popover>
                   </div>
                 </div>
-
                 <Button
                   type="submit"
-                  disabled={sending || !newMessage.trim()}
-                  className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all h-12 px-6"
+                  className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  disabled={sending}
                 >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <Send className="h-4 w-4" />
                 </Button>
               </div>
-
-              {/* Quick reactions */}
-              
-
-              {/* Typing indicator */}
-              <AnimatePresence>
-                {isTyping && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="text-xs text-gray-600 flex items-center gap-2 justify-center"
-                  >
-                    <div className="flex gap-1">
-                      <motion.div
-                        animate={{ scale: [1, 1.3, 1] }}
-                        transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0 }}
-                        className="w-1.5 h-1.5 bg-gray-500 rounded-full"
-                      />
-                      <motion.div
-                        animate={{ scale: [1, 1.3, 1] }}
-                        transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0.2 }}
-                        className="w-1.5 h-1.5 bg-gray-500 rounded-full"
-                      />
-                      <motion.div
-                        animate={{ scale: [1, 1.3, 1] }}
-                        transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0.4 }}
-                        className="w-1.5 h-1.5 bg-gray-500 rounded-full"
-                      />
-                    </div>
-                    <span className="font-medium">You are typing...</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </form>
           </div>
         </RetroBox>

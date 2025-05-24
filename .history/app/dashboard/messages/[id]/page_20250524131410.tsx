@@ -757,7 +757,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
               </div>
 
               {/* Quick reactions */}
-              
+              */}
 
               {/* Typing indicator */}
               <AnimatePresence>
