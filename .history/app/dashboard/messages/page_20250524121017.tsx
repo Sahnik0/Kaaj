@@ -11,12 +11,54 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Send, User, Search, X, Loader2, Phone, Video, PhoneOff, MoreVertical, Archive, Trash2, Pin, Smile, MessageCircle, Clock, CheckCheck, Check, PlusCircle } from 'lucide-react'
+import {
+  Send,
+  User,
+  Search,
+  X,
+  Loader2,
+  Phone,
+  Video,
+  PhoneOff,
+  MoreVertical,
+  Archive,
+  Trash2,
+  Pin,
+  PinOff,
+  Smile,
+  MessageCircle,
+  Clock,
+  CheckCheck,
+  Check,
+  Mic,
+  MicOff,
+  VideoOff,
+  Settings,
+  Users,
+  Maximize,
+  Minimize,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { motion, AnimatePresence } from "framer-motion"
 import { isToday, isYesterday, format, formatDistanceToNow } from "date-fns"
 
@@ -59,6 +101,10 @@ export default function EnhancedMessages() {
     sendMessage,
     createConversation,
     markAllConversationMessagesAsRead,
+    pinConversation,
+    unpinConversation,
+    archiveConversation,
+    deleteConversation,
   } = useFirebase()
 
   // State management
@@ -78,12 +124,22 @@ export default function EnhancedMessages() {
   const [callActive, setCallActive] = useState(false)
   const [callRecipient, setCallRecipient] = useState<any>(null)
   const [zegoInstance, setZegoInstance] = useState<any>(null)
+  const [callStatus, setCallStatus] = useState<"connecting" | "connected" | "ended">("connecting")
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [callDuration, setCallDuration] = useState(0)
+
+  // Dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null)
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const zegoContainerRef = useRef<HTMLDivElement>(null)
   const searchParams = useSearchParams()
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const callTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Zego Cloud configuration
   const ZEGO_APP_ID = 1179547342
@@ -169,6 +225,12 @@ export default function EnhancedMessages() {
     }
   }, [])
 
+  const formatCallDuration = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }, [])
+
   // Load Zego Cloud SDK
   useEffect(() => {
     const script = document.createElement("script")
@@ -182,6 +244,25 @@ export default function EnhancedMessages() {
       }
     }
   }, [])
+
+  // Call timer
+  useEffect(() => {
+    if (callActive && callStatus === "connected") {
+      callTimerRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1)
+      }, 1000)
+    } else {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current)
+      }
+    }
+
+    return () => {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current)
+      }
+    }
+  }, [callActive, callStatus])
 
   // Handle recipient query parameter
   useEffect(() => {
@@ -220,7 +301,7 @@ export default function EnhancedMessages() {
     const fetchConversations = async () => {
       try {
         const data = await getConversations()
-        const updatedData = data.map(ensureParticipantNames)
+        const updatedData = data.map(ensureParticipantNames).filter((conv) => !conv.isArchived) // Filter out archived conversations
 
         // Enhanced sorting: pinned first, then unread, then by last message time
         const sortedData = updatedData.sort((a, b) => {
@@ -407,6 +488,76 @@ export default function EnhancedMessages() {
     [selectedConversation],
   )
 
+  // Enhanced conversation management
+  const handlePinConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        const conversation = conversations.find((c) => c.id === conversationId)
+        if (!conversation) return
+
+        if (conversation.isPinned) {
+          await unpinConversation?.(conversationId)
+        } else {
+          await pinConversation?.(conversationId)
+        }
+
+        // Update local state
+        const updateConvo = (conv: Conversation) =>
+          conv.id === conversationId ? { ...conv, isPinned: !conv.isPinned } : conv
+
+        setConversations((prev) => prev.map(updateConvo))
+        setFilteredConversations((prev) => prev.map(updateConvo))
+
+        if (selectedConversation?.id === conversationId) {
+          setSelectedConversation((prev) => (prev ? updateConvo(prev) : null))
+        }
+      } catch (error) {
+        console.error("Error pinning/unpinning conversation:", error)
+      }
+    },
+    [conversations, pinConversation, unpinConversation, selectedConversation],
+  )
+
+  const handleArchiveConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        await archiveConversation?.(conversationId)
+
+        // Remove from local state
+        setConversations((prev) => prev.filter((conv) => conv.id !== conversationId))
+        setFilteredConversations((prev) => prev.filter((conv) => conv.id !== conversationId))
+
+        if (selectedConversation?.id === conversationId) {
+          const remainingConversations = conversations.filter((conv) => conv.id !== conversationId)
+          setSelectedConversation(remainingConversations.length > 0 ? remainingConversations[0] : null)
+        }
+      } catch (error) {
+        console.error("Error archiving conversation:", error)
+      }
+    },
+    [archiveConversation, conversations, selectedConversation],
+  )
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await deleteConversation?.(conversationId)
+
+      // Remove from local state
+      setConversations((prev) => prev.filter((conv) => conv.id !== conversationId))
+      setFilteredConversations((prev) => prev.filter((conv) => conv.id !== conversationId))
+
+      if (selectedConversation?.id === conversationId) {
+        const remainingConversations = conversations.filter((conv) => conv.id !== conversationId)
+        setSelectedConversation(remainingConversations.length > 0 ? remainingConversations[0] : null)
+      }
+
+      setDeleteDialogOpen(false)
+      setConversationToDelete(null)
+    } catch (error) {
+      console.error("Error deleting conversation:", error)
+    }
+  }
+
   // Enhanced calling functionality
   const initiateCall = useCallback(
     (type: "audio" | "video") => {
@@ -424,6 +575,10 @@ export default function EnhancedMessages() {
         name: getOtherParticipantName(selectedConversation),
       })
       setCallActive(true)
+      setCallStatus("connecting")
+      setCallDuration(0)
+      setIsMuted(false)
+      setIsVideoEnabled(type === "video")
 
       const roomID = `room_${selectedConversation.id}`
       const userID = user?.uid || Math.floor(Math.random() * 10000).toString()
@@ -449,16 +604,19 @@ export default function EnhancedMessages() {
             },
             turnOnMicrophoneWhenJoining: true,
             turnOnCameraWhenJoining: type === "video",
-            showMyCameraToggleButton: type === "video",
-            showMyMicrophoneToggleButton: true,
-            showAudioVideoSettingsButton: true,
-            showScreenSharingButton: type === "video",
+            showMyCameraToggleButton: false,
+            showMyMicrophoneToggleButton: false,
+            showAudioVideoSettingsButton: false,
+            showScreenSharingButton: false,
             showTextChat: false,
             showUserList: false,
             maxUsers: 2,
             layout: "Auto",
             showLayoutButton: false,
-            onJoinRoom: () => console.log("Joined Zego room successfully"),
+            onJoinRoom: () => {
+              console.log("Joined Zego room successfully")
+              setCallStatus("connected")
+            },
             onLeaveRoom: () => endCall(),
           })
         }
@@ -466,6 +624,20 @@ export default function EnhancedMessages() {
     },
     [selectedConversation, user, getOtherParticipantName],
   )
+
+  const toggleMute = useCallback(() => {
+    if (zegoInstance) {
+      zegoInstance.setMicrophoneState(!isMuted)
+      setIsMuted(!isMuted)
+    }
+  }, [zegoInstance, isMuted])
+
+  const toggleVideo = useCallback(() => {
+    if (zegoInstance && callType === "video") {
+      zegoInstance.setCameraState(!isVideoEnabled)
+      setIsVideoEnabled(!isVideoEnabled)
+    }
+  }, [zegoInstance, isVideoEnabled, callType])
 
   const endCall = useCallback(() => {
     if (zegoInstance) {
@@ -480,6 +652,11 @@ export default function EnhancedMessages() {
     setCallType(null)
     setCallRecipient(null)
     setZegoInstance(null)
+    setCallStatus("connecting")
+    setCallDuration(0)
+    setIsMuted(false)
+    setIsVideoEnabled(true)
+    setIsFullscreen(false)
   }, [zegoInstance])
 
   // Memoized conversation item for performance
@@ -489,7 +666,7 @@ export default function EnhancedMessages() {
         const isSelected = selectedConversation?.id === conversation.id
         const hasUnread = conversation.lastMessageSenderId !== user?.uid && !conversation.lastMessageRead
         const otherParticipantName = getOtherParticipantName(conversation)
-        const unreadCount = hasUnread ? (conversation.unreadCount || 1) : 0
+        const unreadCount = hasUnread ? conversation.unreadCount || 1 : 0
 
         return (
           <motion.div
@@ -497,15 +674,15 @@ export default function EnhancedMessages() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             className={cn(
-              "flex items-center gap-3 p-4 cursor-pointer transition-all duration-300 relative group rounded-xl mx-2 my-1",
+              "flex items-center gap-3 p-4 cursor-pointer transition-all duration-300 relative group rounded-lg mx-2 my-1",
               isSelected
-                ? "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 shadow-lg"
-                : "hover:bg-gray-50 hover:shadow-md",
-              hasUnread && "bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-300",
-              conversation.isPinned && "bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200",
+                ? "bg-gradient-to-r from-kaaj-100 to-kaaj-200 border-l-4 border-kaaj-500 shadow-md"
+                : "hover:bg-kaaj-50 hover:shadow-sm",
+              hasUnread && "bg-blue-50/70 border-l-4 border-blue-400",
+              conversation.isPinned && "bg-yellow-50/50",
             )}
             onClick={async () => {
               const updatedConversation = ensureParticipantNames(conversation)
@@ -522,16 +699,13 @@ export default function EnhancedMessages() {
             }}
           >
             <div className="relative">
-              <Avatar className="h-12 w-12 border-2 border-white shadow-lg ring-2 ring-gray-100">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold text-sm">
+              <Avatar className="h-12 w-12 border-2 border-kaaj-200 shadow-sm">
+                <AvatarFallback className="bg-gradient-to-br from-kaaj-100 to-kaaj-300 text-kaaj-800 font-bold text-sm">
                   {otherParticipantName.charAt(0).toUpperCase() || <User className="h-5 w-5" />}
                 </AvatarFallback>
               </Avatar>
               {conversation.isPinned && (
-                <Pin className="absolute -top-1 -right-1 w-4 h-4 text-amber-600 fill-amber-300 drop-shadow-sm" />
-              )}
-              {hasUnread && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
+                <Pin className="absolute -top-1 -right-1 w-4 h-4 text-yellow-600 fill-yellow-300 drop-shadow-sm" />
               )}
             </div>
 
@@ -540,14 +714,14 @@ export default function EnhancedMessages() {
                 <h3
                   className={cn(
                     "font-semibold truncate text-sm",
-                    hasUnread ? "text-gray-900" : "text-gray-700",
-                    isSelected && "text-blue-900",
+                    hasUnread ? "text-kaaj-900" : "text-kaaj-800",
+                    isSelected && "text-kaaj-900",
                   )}
                 >
                   {otherParticipantName}
                 </h3>
                 <div className="flex items-center gap-2 ml-2">
-                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                  <span className="text-xs text-kaaj-500 whitespace-nowrap">
                     {formatMessageTime(conversation.lastMessageTimeDate)}
                   </span>
                   {unreadCount > 0 && (
@@ -558,7 +732,7 @@ export default function EnhancedMessages() {
                     >
                       <Badge
                         variant="destructive"
-                        className="h-5 min-w-[20px] px-1.5 text-xs rounded-full bg-blue-500 hover:bg-blue-500 text-white"
+                        className="h-5 min-w-[20px] px-1.5 text-xs rounded-full bg-red-500 hover:bg-red-500"
                       >
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </Badge>
@@ -570,7 +744,7 @@ export default function EnhancedMessages() {
               <p
                 className={cn(
                   "text-sm truncate leading-relaxed",
-                  hasUnread ? "text-gray-800 font-medium" : "text-gray-600",
+                  hasUnread ? "text-kaaj-800 font-medium" : "text-kaaj-600",
                 )}
               >
                 {conversation.lastMessage || "No messages yet"}
@@ -578,13 +752,67 @@ export default function EnhancedMessages() {
 
               {conversation.jobTitle && (
                 <div className="flex items-center gap-1 mt-1">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <p className="text-xs text-gray-500 truncate">{conversation.jobTitle}</p>
+                  <div className="w-2 h-2 bg-kaaj-400 rounded-full"></div>
+                  <p className="text-xs text-kaaj-500 truncate">{conversation.jobTitle}</p>
                 </div>
               )}
             </div>
 
-            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0 hover:bg-kaaj-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  className="flex items-center gap-2"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlePinConversation(conversation.id)
+                  }}
+                >
+                  {conversation.isPinned ? (
+                    <>
+                      <PinOff className="h-4 w-4" />
+                      Unpin Conversation
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="h-4 w-4" />
+                      Pin Conversation
+                    </>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="flex items-center gap-2"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleArchiveConversation(conversation.id)
+                  }}
+                >
+                  <Archive className="h-4 w-4" />
+                  Archive
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="flex items-center gap-2 text-red-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConversationToDelete(conversation.id)
+                    setDeleteDialogOpen(true)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </motion.div>
         )
       },
@@ -596,6 +824,8 @@ export default function EnhancedMessages() {
       updateConversationReadStatus,
       markAllConversationMessagesAsRead,
       formatMessageTime,
+      handlePinConversation,
+      handleArchiveConversation,
     ],
   )
 
@@ -609,12 +839,12 @@ export default function EnhancedMessages() {
             className="flex flex-col items-center gap-6"
           >
             <div className="relative">
-              <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
-              <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-blue-200 opacity-20"></div>
+              <Loader2 className="h-16 w-16 animate-spin text-kaaj-500" />
+              <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-kaaj-200 opacity-20"></div>
             </div>
             <div className="text-center">
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading Messages</h3>
-              <p className="text-gray-600">Connecting to your conversations...</p>
+              <h3 className="text-xl font-semibold text-kaaj-800 mb-2">Loading Messages</h3>
+              <p className="text-kaaj-600">Connecting to your conversations...</p>
             </div>
           </motion.div>
         </div>
@@ -622,45 +852,37 @@ export default function EnhancedMessages() {
     )
   }
 
-  const totalUnreadCount = conversations.filter(
-    (c) => c.lastMessageSenderId !== user?.uid && !c.lastMessageRead,
-  ).length
+  const totalUnreadCount = conversations.filter((c) => c.lastMessageSenderId !== user?.uid && !c.lastMessageRead).length
 
   return (
     <div className="container mx-auto px-4 py-8">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
-                <MessageCircle className="h-8 w-8 text-white" />
-              </div>
+            <h1 className="text-4xl font-bold text-kaaj-800 mb-2 flex items-center gap-3">
+              <MessageCircle className="h-10 w-10 text-kaaj-600" />
               Messages
               {totalUnreadCount > 0 && (
-                <Badge variant="destructive" className="text-sm px-3 py-1 bg-blue-500">
+                <Badge variant="destructive" className="text-sm px-3 py-1">
                   {totalUnreadCount} new
                 </Badge>
               )}
             </h1>
-            <p className="text-gray-600 text-lg">Stay connected with your professional network</p>
+            <p className="text-kaaj-600 text-lg">Stay connected with your professional network</p>
           </div>
-          {/* <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg">
-            <PlusCircle className="h-4 w-4 mr-2" />
-            New Message
-          </Button> */}
         </div>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-220px)]">
         {/* Enhanced Conversations List */}
-        <Card className="lg:col-span-1 h-full overflow-hidden flex flex-col shadow-xl bg-white border-0 rounded-2xl">
-          <CardHeader className="px-6 py-5 border-b bg-gradient-to-r from-gray-50 to-white">
+        <Card className="border-kaaj-200 lg:col-span-1 h-full overflow-hidden flex flex-col shadow-xl bg-white">
+          <CardHeader className="px-6 py-5 border-b border-kaaj-200 bg-gradient-to-r from-kaaj-50 via-white to-kaaj-50">
             <div className="flex justify-between items-center">
-              <CardTitle className="text-xl text-gray-800 flex items-center gap-3">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <CardTitle className="text-xl text-kaaj-800 flex items-center gap-3">
+                <div className="w-3 h-3 bg-kaaj-500 rounded-full animate-pulse"></div>
                 Conversations
                 {totalUnreadCount > 0 && (
-                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                  <Badge variant="outline" className="text-xs bg-kaaj-100 text-kaaj-700 border-kaaj-300">
                     {totalUnreadCount} unread
                   </Badge>
                 )}
@@ -668,14 +890,14 @@ export default function EnhancedMessages() {
             </div>
           </CardHeader>
 
-          <div className="p-4 border-b bg-gray-50">
+          <div className="p-4 border-b border-kaaj-100 bg-kaaj-25">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-kaaj-400" />
               <Input
                 placeholder="Search conversations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 border-gray-200 focus-visible:ring-blue-500 bg-white shadow-sm rounded-xl"
+                className="pl-10 border-kaaj-300 focus-visible:ring-kaaj-500 bg-white shadow-sm rounded-lg"
               />
               <AnimatePresence>
                 {searchQuery && (
@@ -683,7 +905,7 @@ export default function EnhancedMessages() {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 rounded-full bg-kaaj-200 hover:bg-kaaj-300 flex items-center justify-center transition-colors"
                     onClick={() => setSearchQuery("")}
                   >
                     <X className="h-3 w-3" />
@@ -704,24 +926,24 @@ export default function EnhancedMessages() {
                 >
                   {searchQuery ? (
                     <>
-                      <Search className="h-20 w-20 text-gray-300 mb-6" />
-                      <h3 className="text-xl font-semibold text-gray-700 mb-3">No matching conversations</h3>
-                      <p className="text-sm text-gray-500 mb-6 max-w-sm">
+                      <Search className="h-20 w-20 text-kaaj-300 mb-6" />
+                      <h3 className="text-xl font-semibold text-kaaj-700 mb-3">No matching conversations</h3>
+                      <p className="text-sm text-kaaj-500 mb-6 max-w-sm">
                         We couldn't find any conversations matching "{searchQuery}". Try a different search term.
                       </p>
                       <Button
                         onClick={() => setSearchQuery("")}
                         variant="outline"
-                        className="border-gray-300 text-gray-600 hover:bg-gray-50"
+                        className="border-kaaj-300 text-kaaj-600 hover:bg-kaaj-50"
                       >
                         <X className="h-4 w-4 mr-2" /> Clear Search
                       </Button>
                     </>
                   ) : (
                     <>
-                      <MessageCircle className="h-20 w-20 text-gray-300 mb-6" />
-                      <h3 className="text-xl font-semibold text-gray-700 mb-3">No conversations yet</h3>
-                      <p className="text-sm text-gray-500 max-w-sm">
+                      <MessageCircle className="h-20 w-20 text-kaaj-300 mb-6" />
+                      <h3 className="text-xl font-semibold text-kaaj-700 mb-3">No conversations yet</h3>
+                      <p className="text-sm text-kaaj-500 max-w-sm">
                         Start networking and connecting with professionals to see your conversations here.
                       </p>
                     </>
@@ -739,31 +961,31 @@ export default function EnhancedMessages() {
         </Card>
 
         {/* Enhanced Messages Panel */}
-        <Card className="lg:col-span-2 h-full overflow-hidden flex flex-col shadow-xl bg-white border-0 rounded-2xl">
+        <Card className="border-kaaj-200 lg:col-span-2 h-full overflow-hidden flex flex-col shadow-xl bg-white">
           {selectedConversation ? (
             <>
-              <CardHeader className="px-6 py-5 border-b bg-gradient-to-r from-gray-50 to-white">
+              <CardHeader className="px-6 py-5 border-b border-kaaj-200 bg-gradient-to-r from-kaaj-50 via-white to-kaaj-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="relative">
-                      <Avatar className="h-12 w-12 border-2 border-white shadow-lg ring-2 ring-gray-100">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold">
+                      <Avatar className="h-12 w-12 border-2 border-kaaj-200 shadow-sm">
+                        <AvatarFallback className="bg-gradient-to-br from-kaaj-100 to-kaaj-300 text-kaaj-800 font-bold">
                           <User className="h-6 w-6" />
                         </AvatarFallback>
                       </Avatar>
                       <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
                     </div>
                     <div>
-                      <CardTitle className="text-xl text-gray-800">
+                      <CardTitle className="text-xl text-kaaj-800">
                         {getOtherParticipantName(selectedConversation)}
                       </CardTitle>
                       {selectedConversation.jobTitle && (
-                        <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
-                          <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        <p className="text-sm text-kaaj-600 flex items-center gap-1 mt-1">
+                          <div className="w-2 h-2 bg-kaaj-400 rounded-full"></div>
                           {selectedConversation.jobTitle}
                         </p>
                       )}
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                      <p className="text-xs text-kaaj-500 flex items-center gap-1 mt-1">
                         <Clock className="h-3 w-3" />
                         Last seen {formatLastSeen(selectedConversation.lastMessageTimeDate)}
                       </p>
@@ -778,7 +1000,7 @@ export default function EnhancedMessages() {
                             onClick={() => initiateCall("audio")}
                             variant="outline"
                             size="sm"
-                            className="bg-green-50 border-green-200 hover:bg-green-100 text-green-700 shadow-sm rounded-xl"
+                            className="bg-green-50 border-green-200 hover:bg-green-100 text-green-700 shadow-sm"
                           >
                             <Phone className="h-4 w-4" />
                           </Button>
@@ -794,7 +1016,7 @@ export default function EnhancedMessages() {
                             onClick={() => initiateCall("video")}
                             variant="outline"
                             size="sm"
-                            className="bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700 shadow-sm rounded-xl"
+                            className="bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700 shadow-sm"
                           >
                             <Video className="h-4 w-4" />
                           </Button>
@@ -806,7 +1028,7 @@ export default function EnhancedMessages() {
                 </div>
               </CardHeader>
 
-              <ScrollArea className="flex-1 p-6 bg-gradient-to-b from-white to-gray-50">
+              <ScrollArea className="flex-1 p-6 bg-gradient-to-b from-white to-kaaj-25">
                 <AnimatePresence>
                   {messages.length === 0 ? (
                     <motion.div
@@ -815,15 +1037,13 @@ export default function EnhancedMessages() {
                       className="flex flex-col items-center justify-center h-full text-center py-20"
                     >
                       <div className="relative mb-6">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                          <Send className="h-10 w-10 text-white" />
-                        </div>
-                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center">
-                          <span className="text-black text-xs">✨</span>
+                        <Send className="h-20 w-20 text-kaaj-300" />
+                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-kaaj-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">✨</span>
                         </div>
                       </div>
-                      <h3 className="text-2xl font-semibold text-gray-700 mb-3">Start the conversation</h3>
-                      <p className="text-gray-500 max-w-md">
+                      <h3 className="text-2xl font-semibold text-kaaj-700 mb-3">Start the conversation</h3>
+                      <p className="text-kaaj-500 max-w-md">
                         Send a message to {getOtherParticipantName(selectedConversation)} and begin your professional
                         conversation.
                       </p>
@@ -845,8 +1065,8 @@ export default function EnhancedMessages() {
                             className={cn("flex gap-3", isSender ? "justify-end" : "justify-start")}
                           >
                             {!isSender && showAvatar && (
-                              <Avatar className="h-8 w-8 border border-gray-200 shadow-sm">
-                                <AvatarFallback className="bg-gray-100 text-gray-700 text-sm font-semibold">
+                              <Avatar className="h-8 w-8 border border-kaaj-200 shadow-sm">
+                                <AvatarFallback className="bg-kaaj-100 text-kaaj-700 text-sm font-semibold">
                                   {getOtherParticipantName(selectedConversation).charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
@@ -856,17 +1076,17 @@ export default function EnhancedMessages() {
                             <div className={cn("max-w-[75%] group", isSender && "order-first")}>
                               <div
                                 className={cn(
-                                  "px-4 py-3 rounded-2xl shadow-sm transition-all duration-200 relative",
+                                  "px-4 py-3 rounded-2xl shadow-sm border transition-all duration-200 relative",
                                   isSender
-                                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-md"
-                                    : "bg-white text-gray-800 border border-gray-200 rounded-bl-md",
+                                    ? "bg-kaaj-500 text-white border-kaaj-600 rounded-br-md"
+                                    : "bg-white text-kaaj-800 border-kaaj-200 rounded-bl-md",
                                   "hover:shadow-md transform hover:scale-[1.02]",
                                   isOptimistic && "opacity-70",
                                 )}
                               >
                                 <div className="break-words leading-relaxed">{message.content}</div>
                                 <div className="flex justify-between items-center mt-2">
-                                  <div className={cn("text-xs", isSender ? "text-white/70" : "text-gray-500")}>
+                                  <div className={cn("text-xs", isSender ? "text-white/70" : "text-kaaj-500")}>
                                     {formatMessageTime(message.timestamp)}
                                   </div>
 
@@ -910,14 +1130,14 @@ export default function EnhancedMessages() {
 
               <Separator />
 
-              <div className="p-6 bg-white">
+              <div className="p-6 bg-white border-t border-kaaj-100">
                 <form onSubmit={handleSendMessage} className="flex gap-3 items-end">
                   <div className="flex-1 relative">
                     <Input
                       placeholder="Type your message..."
                       value={newMessage}
                       onChange={(e) => handleTyping(e.target.value)}
-                      className="pr-16 border-gray-200 focus-visible:ring-blue-500 bg-gray-50 rounded-full py-3 px-4 text-sm shadow-sm"
+                      className="pr-16 border-kaaj-300 focus-visible:ring-kaaj-500 bg-kaaj-50/50 rounded-full py-3 px-4 text-sm shadow-sm"
                       disabled={sending}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -934,28 +1154,91 @@ export default function EnhancedMessages() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-full"
+                            className="h-8 w-8 p-0 text-kaaj-500 hover:text-kaaj-600 hover:bg-kaaj-100 rounded-full"
                           >
                             <Smile className="h-4 w-4" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80 border-gray-200 shadow-xl rounded-2xl">
+                        <PopoverContent className="w-80 border-kaaj-200 shadow-xl">
                           <div className="grid grid-cols-8 gap-2 p-3">
                             {[
-                              "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
-                              "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰",
-                              "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜",
-                              "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏",
-                              "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙",
-                              "👏", "🙌", "🤝", "🙏", "❤️", "🧡", "💛", "💚",
-                              "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕",
-                              "💞", "💓", "💗", "💖", "💘", "💝", "💟", "🔥",
-                              "💯", "💢", "💥", "💫", "💦", "💨", "💣", "💬",
+                              "😀",
+                              "😃",
+                              "😄",
+                              "😁",
+                              "😆",
+                              "😅",
+                              "😂",
+                              "🤣",
+                              "😊",
+                              "😇",
+                              "🙂",
+                              "🙃",
+                              "😉",
+                              "😌",
+                              "😍",
+                              "🥰",
+                              "😘",
+                              "😗",
+                              "😙",
+                              "😚",
+                              "😋",
+                              "😛",
+                              "😝",
+                              "😜",
+                              "🤪",
+                              "🤨",
+                              "🧐",
+                              "🤓",
+                              "😎",
+                              "🤩",
+                              "🥳",
+                              "😏",
+                              "👍",
+                              "👎",
+                              "👌",
+                              "✌️",
+                              "🤞",
+                              "🤟",
+                              "🤘",
+                              "🤙",
+                              "👏",
+                              "🙌",
+                              "🤝",
+                              "🙏",
+                              "❤️",
+                              "🧡",
+                              "💛",
+                              "💚",
+                              "💙",
+                              "💜",
+                              "🖤",
+                              "🤍",
+                              "🤎",
+                              "💔",
+                              "❣️",
+                              "💕",
+                              "💞",
+                              "💓",
+                              "💗",
+                              "💖",
+                              "💘",
+                              "💝",
+                              "💟",
+                              "🔥",
+                              "💯",
+                              "💢",
+                              "💥",
+                              "💫",
+                              "💦",
+                              "💨",
+                              "💣",
+                              "💬",
                             ].map((emoji) => (
                               <button
                                 key={emoji}
                                 type="button"
-                                className="p-2 hover:bg-gray-100 rounded-lg text-lg transition-colors hover:scale-110 transform"
+                                className="p-2 hover:bg-kaaj-100 rounded-lg text-lg transition-colors hover:scale-110 transform"
                                 onClick={() => setNewMessage((prev) => prev + emoji)}
                               >
                                 {emoji}
@@ -970,7 +1253,7 @@ export default function EnhancedMessages() {
                   <Button
                     type="submit"
                     disabled={!newMessage.trim() || sending}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 h-12 w-12 p-0 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                    className="bg-kaaj-500 hover:bg-kaaj-600 h-12 w-12 p-0 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                   >
                     {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                   </Button>
@@ -981,23 +1264,23 @@ export default function EnhancedMessages() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="text-xs text-gray-500 mt-2 flex items-center gap-2"
+                    className="text-xs text-kaaj-500 mt-2 flex items-center gap-2"
                   >
                     <div className="flex gap-1">
                       <motion.div
                         animate={{ scale: [1, 1.2, 1] }}
                         transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0 }}
-                        className="w-1 h-1 bg-gray-400 rounded-full"
+                        className="w-1 h-1 bg-kaaj-400 rounded-full"
                       />
                       <motion.div
                         animate={{ scale: [1, 1.2, 1] }}
                         transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0.2 }}
-                        className="w-1 h-1 bg-gray-400 rounded-full"
+                        className="w-1 h-1 bg-kaaj-400 rounded-full"
                       />
                       <motion.div
                         animate={{ scale: [1, 1.2, 1] }}
                         transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1, delay: 0.4 }}
-                        className="w-1 h-1 bg-gray-400 rounded-full"
+                        className="w-1 h-1 bg-kaaj-400 rounded-full"
                       />
                     </div>
                     You are typing...
@@ -1009,18 +1292,16 @@ export default function EnhancedMessages() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center h-full p-8 text-center bg-gradient-to-b from-white to-gray-50"
+              className="flex flex-col items-center justify-center h-full p-8 text-center bg-gradient-to-b from-white to-kaaj-25"
             >
               <div className="relative mb-8">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                  <MessageCircle className="h-12 w-12 text-white" />
-                </div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                  <span className="text-black text-sm">💬</span>
+                <MessageCircle className="h-24 w-24 text-kaaj-300" />
+                <div className="absolute -top-2 -right-2 w-8 h-8 bg-kaaj-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm">💬</span>
                 </div>
               </div>
-              <h3 className="text-2xl font-semibold text-gray-700 mb-3">Select a conversation</h3>
-              <p className="text-gray-500 max-w-md">
+              <h3 className="text-2xl font-semibold text-kaaj-700 mb-3">Select a conversation</h3>
+              <p className="text-kaaj-500 max-w-md">
                 Choose a conversation from the list to start messaging and build meaningful professional connections.
               </p>
             </motion.div>
@@ -1030,45 +1311,216 @@ export default function EnhancedMessages() {
 
       {/* Enhanced Call Dialog */}
       <Dialog open={callActive} onOpenChange={(open) => !open && endCall()}>
-        <DialogContent className="sm:max-w-[900px] md:max-w-[1100px] lg:max-w-[1300px] h-[85vh] p-0 border-0 rounded-2xl">
-          <DialogHeader className="p-6 pb-0 bg-gradient-to-r from-gray-50 to-white">
-            <DialogTitle className="flex items-center gap-3 text-xl">
-              {callType === "audio" ? (
-                <div className="p-2 bg-green-100 rounded-full">
-                  <Phone className="h-5 w-5 text-green-600" />
+        <DialogContent
+          className={cn(
+            "p-0 border-kaaj-200 bg-gray-900 text-white overflow-hidden",
+            isFullscreen
+              ? "w-screen h-screen max-w-none"
+              : "sm:max-w-[900px] md:max-w-[1100px] lg:max-w-[1300px] h-[85vh]",
+          )}
+        >
+          <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  {callType === "audio" ? (
+                    <div className="p-3 bg-green-600 rounded-full">
+                      <Phone className="h-6 w-6 text-white" />
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-blue-600 rounded-full">
+                      <Video className="h-6 w-6 text-white" />
+                    </div>
+                  )}
+                  <div>
+                    <DialogTitle className="text-xl text-white">
+                      {callType === "audio" ? "Audio Call" : "Video Call"}
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-300">{callRecipient?.name}</DialogDescription>
+                  </div>
                 </div>
-              ) : (
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <Video className="h-5 w-5 text-blue-600" />
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "w-3 h-3 rounded-full",
+                        callStatus === "connecting"
+                          ? "bg-yellow-500 animate-pulse"
+                          : callStatus === "connected"
+                            ? "bg-green-500"
+                            : "bg-red-500",
+                      )}
+                    />
+                    <span className="text-sm text-gray-300 capitalize">{callStatus}</span>
+                  </div>
+
+                  {callStatus === "connected" && (
+                    <div className="text-sm text-gray-300 font-mono">{formatCallDuration(callDuration)}</div>
+                  )}
                 </div>
-              )}
-              {callType === "audio" ? "Audio Call" : "Video Call"} with {callRecipient?.name}
-            </DialogTitle>
-            <DialogDescription className="text-gray-600">
-              High-quality {callType} call powered by Zego Cloud
-            </DialogDescription>
+              </div>
+
+              <Button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                variant="ghost"
+                size="sm"
+                className="text-gray-300 hover:text-white hover:bg-gray-700"
+              >
+                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </Button>
+            </div>
           </DialogHeader>
 
-          <div className="flex-1 p-6 pt-0">
+          <div className="flex-1 relative">
             <div
               ref={zegoContainerRef}
-              className="w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-2xl"
-              style={{ minHeight: "500px" }}
+              className="w-full h-full bg-gray-900"
+              style={{ minHeight: isFullscreen ? "calc(100vh - 200px)" : "500px" }}
             />
+
+            {/* Call Status Overlay */}
+            {callStatus === "connecting" && (
+              <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="relative mb-6">
+                    <Avatar className="h-24 w-24 border-4 border-white shadow-xl mx-auto">
+                      <AvatarFallback className="bg-gradient-to-br from-kaaj-100 to-kaaj-300 text-kaaj-800 font-bold text-2xl">
+                        {callRecipient?.name?.charAt(0) || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute inset-0 border-4 border-white rounded-full animate-ping opacity-30"></div>
+                  </div>
+                  <h3 className="text-2xl font-semibold text-white mb-2">Connecting...</h3>
+                  <p className="text-gray-300">Calling {callRecipient?.name}</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex justify-center p-6 pt-0 bg-gradient-to-r from-gray-50 to-white">
-            <Button
-              onClick={endCall}
-              variant="destructive"
-              className="bg-red-600 hover:bg-red-700 px-8 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
-            >
-              <PhoneOff className="h-5 w-5 mr-2" />
-              End Call
-            </Button>
+          {/* Enhanced Call Controls */}
+          <div className="p-6 bg-gradient-to-r from-gray-800 to-gray-900 border-t border-gray-700">
+            <div className="flex items-center justify-center gap-4">
+              {/* Mute Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={toggleMute}
+                      variant="outline"
+                      size="lg"
+                      className={cn(
+                        "h-14 w-14 rounded-full border-2 transition-all",
+                        isMuted
+                          ? "bg-red-600 border-red-500 hover:bg-red-700 text-white"
+                          : "bg-gray-700 border-gray-600 hover:bg-gray-600 text-white",
+                      )}
+                    >
+                      {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{isMuted ? "Unmute" : "Mute"}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {/* Video Toggle (only for video calls) */}
+              {callType === "video" && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={toggleVideo}
+                        variant="outline"
+                        size="lg"
+                        className={cn(
+                          "h-14 w-14 rounded-full border-2 transition-all",
+                          !isVideoEnabled
+                            ? "bg-red-600 border-red-500 hover:bg-red-700 text-white"
+                            : "bg-gray-700 border-gray-600 hover:bg-gray-600 text-white",
+                        )}
+                      >
+                        {isVideoEnabled ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{isVideoEnabled ? "Turn off camera" : "Turn on camera"}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              {/* End Call Button */}
+              <Button
+                onClick={endCall}
+                variant="destructive"
+                size="lg"
+                className="h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 border-2 border-red-500 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </Button>
+
+              {/* Settings Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="h-14 w-14 rounded-full border-2 bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
+                    >
+                      <Settings className="h-6 w-6" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Settings</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {/* Participants Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="h-14 w-14 rounded-full border-2 bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
+                    >
+                      <Users className="h-6 w-6" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Participants</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone and all messages will be
+              permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setConversationToDelete(null)
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => conversationToDelete && handleDeleteConversation(conversationToDelete)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -757,7 +757,19 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
               </div>
 
               {/* Quick reactions */}
-              
+              <div className="flex gap-3 justify-center items-center">
+                <span className="text-xs text-gray-600 font-medium">Quick reactions:</span>
+                {["👍", "❤️", "😂", "😮", "👏", "🔥", "💯", "🎉"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="text-lg hover:scale-125 transition-transform hover:bg-yellow-200 rounded-full p-1 border border-transparent hover:border-black"
+                    onClick={() => setNewMessage((prev) => prev + emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               {/* Typing indicator */}
               <AnimatePresence>

@@ -584,7 +584,31 @@ export default function EnhancedMessages() {
               )}
             </div>
 
-            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0 hover:bg-gray-200 rounded-full"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem className="flex items-center gap-2">
+                  <Pin className="h-4 w-4" />
+                  {conversation.isPinned ? "Unpin" : "Pin"} Conversation
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex items-center gap-2">
+                  <Archive className="h-4 w-4" />
+                  Archive
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex items-center gap-2 text-red-600">
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </motion.div>
         )
       },

@@ -22,16 +22,34 @@ import {
   Clock,
   CheckCheck,
   Check,
+  Pin,
+  PinOff,
+  Archive,
+  Trash2,
 } from "lucide-react"
-import { RetroBox } from "@/components/ui/retro-box"
-import { useLanguage } from "@/lib/i18n/language-context"
-import { useRetroToast } from "@/hooks/use-retro-toast"
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Card } from "@/components/ui/card"
 
 interface ConversationProps {
   params: {
@@ -57,6 +75,8 @@ interface Conversation {
   lastMessageRead: boolean
   jobId?: string
   jobTitle?: string
+  isPinned?: boolean
+  isArchived?: boolean
 }
 
 export default function EnhancedConversationPage({ params }: ConversationProps) {
@@ -69,6 +89,10 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     markAllConversationMessagesAsRead,
     markConversationMessageAsRead,
     markConversationMessageAsUnread,
+    pinConversation,
+    unpinConversation,
+    archiveConversation,
+    deleteConversation,
   } = useFirebase()
 
   // State management
@@ -79,13 +103,13 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Refs
   const router = useRouter()
-  const { t } = useLanguage()
-  const { toast } = useRetroToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
 
   // Enhanced time formatting
   const formatMessageTime = useCallback((timestamp: any) => {
@@ -146,6 +170,47 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
     [conversation],
   )
 
+  // Conversation management functions
+  const handlePinConversation = async () => {
+    if (!conversation) return
+
+    try {
+      if (conversation.isPinned) {
+        await unpinConversation?.(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: false } : null))
+      } else {
+        await pinConversation?.(conversation.id)
+        setConversation((prev) => (prev ? { ...prev, isPinned: true } : null))
+      }
+    } catch (error) {
+      console.error("Error pinning/unpinning conversation:", error)
+    }
+  }
+
+  const handleArchiveConversation = async () => {
+    if (!conversation) return
+
+    try {
+      await archiveConversation?.(conversation.id)
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error archiving conversation:", error)
+    }
+  }
+
+  const handleDeleteConversation = async () => {
+    if (!conversation) return
+
+    try {
+      await deleteConversation?.(conversation.id)
+      router.push("/dashboard/messages")
+    } catch (error) {
+      console.error("Error deleting conversation:", error)
+    } finally {
+      setDeleteDialogOpen(false)
+    }
+  }
+
   // Fetch conversation and messages
   useEffect(() => {
     async function fetchData() {
@@ -155,11 +220,6 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
         const conversationData = await getConversationById(id)
 
         if (!conversationData) {
-          toast({
-            title: "Error",
-            description: "Conversation not found",
-            variant: "destructive",
-          })
           router.push("/dashboard/messages")
           return
         }
@@ -181,17 +241,12 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
         setLoading(false)
       } catch (error) {
         console.error("Error fetching conversation:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load conversation",
-          variant: "destructive",
-        })
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [user, id, getConversationById, router, toast])
+  }, [user, id, getConversationById, router])
 
   // Real-time messages listener with enhanced read status management
   useEffect(() => {
@@ -239,15 +294,10 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
       const isParticipant = conversation.participants.includes(user.uid)
 
       if (!isParticipant) {
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to view this conversation",
-          variant: "destructive",
-        })
         router.push("/dashboard/messages")
       }
     }
-  }, [conversation, user, loading, router, toast])
+  }, [conversation, user, loading, router])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -303,11 +353,6 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId))
       // Restore message content
       setNewMessage(messageContent)
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      })
     } finally {
       setSending(false)
     }
@@ -315,15 +360,15 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[60vh]">
+      <div className="flex items-center justify-center h-full min-h-[60vh] bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-6"
         >
           <div className="relative">
-            <Loader2 className="h-16 w-16 animate-spin text-yellow-500" />
-            <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-yellow-200 opacity-20"></div>
+            <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
+            <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-blue-200 opacity-20"></div>
           </div>
           <div className="text-center">
             <h3 className="text-xl font-bold mb-2">Loading conversation...</h3>
@@ -337,7 +382,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
   if (!conversation || !otherUser) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <RetroBox className="p-8 text-center">
+        <Card className="p-8 text-center shadow-2xl rounded-3xl border-0 bg-white/80 backdrop-blur-xl ring-1 ring-gray-200/50">
           <div className="mb-6">
             <MessageCircle className="h-20 w-20 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-4">Conversation not found</h2>
@@ -346,23 +391,23 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
             </p>
           </div>
           <Button
-            className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg"
             onClick={() => router.push("/dashboard/messages")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Messages
           </Button>
-        </RetroBox>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="mb-6">
         <Button
           variant="outline"
-          className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+          className="border-gray-200 shadow-lg hover:shadow-xl transition-all rounded-2xl bg-white/80 backdrop-blur-sm hover:bg-white/90"
           onClick={() => router.push("/dashboard/messages")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -371,28 +416,31 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <RetroBox className="h-[calc(100vh-12rem)] flex flex-col">
+        <Card className="h-[calc(100vh-12rem)] flex flex-col shadow-2xl rounded-3xl border-0 overflow-hidden bg-white/80 backdrop-blur-xl ring-1 ring-gray-200/50">
           {/* Enhanced conversation header */}
-          <div className="border-b-2 border-black p-6 bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100">
+          <div className="border-b p-6 bg-gradient-to-r from-blue-50/80 to-purple-50/80 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <Avatar className="h-14 w-14 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                    <AvatarFallback className="bg-yellow-300 text-black font-bold text-lg">
+                  <Avatar className="h-14 w-14 border-2 border-white shadow-xl ring-2 ring-blue-100/50 backdrop-blur-sm">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 text-white font-bold text-lg">
                       {otherUser.displayName?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                  {conversation.isPinned && (
+                    <Pin className="absolute -top-1 -left-1 w-4 h-4 text-amber-600 fill-amber-300 drop-shadow-sm" />
+                  )}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-black">{otherUser.displayName}</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">{otherUser.displayName}</h2>
                   {conversation.jobTitle && (
-                    <p className="text-sm text-gray-700 flex items-center gap-2 mt-1">
-                      <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
+                    <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
                       {conversation.jobTitle}
                     </p>
                   )}
-                  <p className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                     <Clock className="h-3 w-3" />
                     Last seen {formatLastSeen(conversation.lastMessageTimeDate)}
                   </p>
@@ -406,7 +454,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-green-100 hover:bg-green-200 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        className="border-gray-200 shadow-lg bg-green-50/80 hover:bg-green-100/80 text-green-700 rounded-2xl backdrop-blur-sm transition-all hover:shadow-xl"
                       >
                         <Phone className="h-4 w-4" />
                       </Button>
@@ -421,7 +469,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-blue-100 hover:bg-blue-200 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        className="border-gray-200 shadow-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl"
                       >
                         <Video className="h-4 w-4" />
                       </Button>
@@ -435,18 +483,34 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                      className="border-gray-200 shadow-sm hover:shadow-md rounded-xl"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                  >
-                    <DropdownMenuItem>View Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Block User</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Report</DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="border-gray-200 shadow-xl rounded-xl">
+                    <DropdownMenuItem onClick={handlePinConversation}>
+                      {conversation.isPinned ? (
+                        <>
+                          <PinOff className="h-4 w-4 mr-2" />
+                          Unpin Conversation
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="h-4 w-4 mr-2" />
+                          Pin Conversation
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleArchiveConversation}>
+                      <Archive className="h-4 w-4 mr-2" />
+                      Archive
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-red-600" onClick={() => setDeleteDialogOpen(true)}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -454,17 +518,19 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
           </div>
 
           {/* Enhanced messages area */}
-          <ScrollArea className="flex-1 p-6 bg-gradient-to-b from-yellow-50 to-white">
+          <ScrollArea className="flex-1 p-6 bg-gradient-to-b from-white/50 to-gray-50/50 backdrop-blur-sm">
             <AnimatePresence>
               {messages.length === 0 ? (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 space-y-6">
                   <div className="relative">
-                    <div className="text-8xl mb-4">💬</div>
-                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg mx-auto">
+                      <MessageCircle className="h-10 w-10 text-white" />
+                    </div>
+                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg">
                       <span className="text-black text-sm font-bold">✨</span>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-black">No messages yet</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">No messages yet</h3>
                   <p className="text-gray-600 max-w-md mx-auto">
                     Start the conversation by sending a message to {otherUser.displayName} below.
                   </p>
@@ -486,8 +552,8 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                       >
                         <div className={cn("max-w-[80%] flex gap-3", isSender ? "flex-row-reverse" : "flex-row")}>
                           {!isSender && showAvatar && (
-                            <Avatar className="h-8 w-8 border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                              <AvatarFallback className="bg-blue-200 text-black font-bold text-sm">
+                            <Avatar className="h-8 w-8 border border-gray-200 shadow-sm">
+                              <AvatarFallback className="bg-gray-100 text-gray-700 font-bold text-sm">
                                 {otherUser.displayName?.charAt(0) || "U"}
                               </AvatarFallback>
                             </Avatar>
@@ -497,9 +563,11 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                           <div className="space-y-2">
                             <div
                               className={cn(
-                                "relative p-4 rounded-lg border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all duration-200",
-                                isSender ? "bg-yellow-300 text-black ml-auto" : "bg-white text-black",
-                                "hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px]",
+                                "relative p-4 rounded-2xl shadow-lg transition-all duration-300 backdrop-blur-sm",
+                                isSender
+                                  ? "bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white ml-auto rounded-br-md shadow-blue-500/25"
+                                  : "bg-white/90 text-gray-800 border border-gray-200/50 rounded-bl-md shadow-gray-500/10",
+                                "hover:shadow-xl hover:scale-[1.01]",
                                 isOptimistic && "opacity-70",
                               )}
                             >
@@ -508,14 +576,14 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                               {/* Message actions for received messages */}
                               {!isSender && (
                                 <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <div className="flex gap-1 bg-white border-2 border-black rounded-lg p-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                  <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-lg">
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-6 w-6 p-0 hover:bg-gray-100"
+                                            className="h-6 w-6 p-0 hover:bg-gray-100 rounded"
                                             onClick={() => {
                                               if (message.read) {
                                                 markConversationMessageAsUnread(id, message.id)
@@ -555,7 +623,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                                     {message.read ? (
                                       <Badge
                                         variant="outline"
-                                        className="text-xs bg-green-100 text-green-700 border-green-300 border-2 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                        className="text-xs bg-green-50 text-green-700 border-green-200 shadow-sm"
                                       >
                                         <CheckCheck className="h-3 w-3 mr-1" />
                                         Read
@@ -563,7 +631,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                                     ) : (
                                       <Badge
                                         variant="outline"
-                                        className="text-xs bg-gray-100 text-gray-600 border-gray-300 border-2 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                        className="text-xs bg-gray-50 text-gray-600 border-gray-200 shadow-sm"
                                       >
                                         <Check className="h-3 w-3 mr-1" />
                                         Sent
@@ -591,18 +659,19 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
             </AnimatePresence>
           </ScrollArea>
 
-          <Separator className="border-black border-t-2" />
+          <Separator />
 
           {/* Enhanced message input */}
-          <div className="p-6 bg-gradient-to-r from-yellow-50 via-yellow-100 to-yellow-50">
+          <div className="p-6 bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-sm">
             <form onSubmit={handleSendMessage} className="space-y-4">
               <div className="flex gap-3 items-end">
                 <div className="flex-1 relative">
                   <Input
+                    ref={messageInputRef}
                     placeholder="Type your message..."
                     value={newMessage}
                     onChange={(e) => handleTyping(e.target.value)}
-                    className="border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] pr-16 py-3 px-4 text-sm bg-white rounded-lg"
+                    className="border-gray-200 focus-visible:ring-blue-500 pr-16 py-3 px-4 text-sm bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg transition-all focus:shadow-xl"
                     disabled={sending}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -619,12 +688,12 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0 hover:bg-yellow-200 rounded-full"
+                          className="h-8 w-8 p-0 hover:bg-gray-200 rounded-full"
                         >
                           <Smile className="h-4 w-4" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-80 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white">
+                      <PopoverContent className="w-80 border-gray-200 shadow-xl rounded-2xl bg-white">
                         <div className="grid grid-cols-8 gap-2 p-3 max-h-64 overflow-y-auto">
                           {[
                             "😀",
@@ -659,38 +728,6 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                             "🤩",
                             "🥳",
                             "😏",
-                            "😒",
-                            "😞",
-                            "😔",
-                            "😟",
-                            "😕",
-                            "🙁",
-                            "☹️",
-                            "😣",
-                            "😖",
-                            "😫",
-                            "😩",
-                            "🥺",
-                            "😢",
-                            "😭",
-                            "😤",
-                            "😠",
-                            "😡",
-                            "🤬",
-                            "🤯",
-                            "😳",
-                            "🥵",
-                            "🥶",
-                            "😱",
-                            "😨",
-                            "😰",
-                            "😥",
-                            "😓",
-                            "🤗",
-                            "🤔",
-                            "🤭",
-                            "🤫",
-                            "🤥",
                             "👍",
                             "👎",
                             "👌",
@@ -735,7 +772,7 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                             <button
                               key={emoji}
                               type="button"
-                              className="p-2 hover:bg-yellow-100 rounded-lg text-lg transition-all hover:scale-110 transform border border-transparent hover:border-black"
+                              className="p-2 hover:bg-gray-100 rounded-lg text-lg transition-all hover:scale-110 transform border border-transparent hover:border-gray-200"
                               onClick={() => setNewMessage((prev) => prev + emoji)}
                             >
                               {emoji}
@@ -750,14 +787,26 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
                 <Button
                   type="submit"
                   disabled={sending || !newMessage.trim()}
-                  className="bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all h-12 px-6"
+                  className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 hover:from-blue-600 hover:via-purple-600 hover:to-indigo-700 text-white shadow-xl hover:shadow-2xl transition-all h-12 px-6 rounded-2xl transform hover:scale-105"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
 
               {/* Quick reactions */}
-              
+              <div className="flex gap-3 justify-center items-center">
+                <span className="text-xs text-gray-600 font-medium">Quick reactions:</span>
+                {["👍", "❤️", "😂", "😮", "👏", "🔥", "💯", "🎉"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="text-lg hover:scale-125 transition-transform hover:bg-gray-100 rounded-full p-1 border border-transparent hover:border-gray-200"
+                    onClick={() => setNewMessage((prev) => prev + emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               {/* Typing indicator */}
               <AnimatePresence>
@@ -791,8 +840,35 @@ export default function EnhancedConversationPage({ params }: ConversationProps) 
               </AnimatePresence>
             </form>
           </div>
-        </RetroBox>
+        </Card>
       </motion.div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="border-gray-200 shadow-xl rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold">Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-600">
+              Are you sure you want to delete this conversation with {otherUser?.displayName}? This action cannot be
+              undone and all messages will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-gray-200 shadow-sm hover:shadow-md rounded-xl"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConversation}
+              className="bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl rounded-xl"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
